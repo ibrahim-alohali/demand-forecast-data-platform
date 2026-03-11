@@ -45,3 +45,6 @@ data/*.json
 htmlcov/
 .coverage
 .coverage.*
+
+# Personal
+.claude/settings.local.json
