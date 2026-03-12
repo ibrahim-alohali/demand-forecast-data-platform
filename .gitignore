@@ -29,11 +29,14 @@ Thumbs.db
 # Docker
 docker-data/
 
-# Data files (keep .gitkeep)
+# Data files (keep .gitkeep and sample files)
 data/*.csv
 data/*.parquet
 data/*.json
+data/*.xlsx
+data/*.zip
 !data/.gitkeep
+!data/sample_online_retail.csv
 
 # Pytest
 .pytest_cache/

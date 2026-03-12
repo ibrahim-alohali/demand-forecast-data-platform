@@ -2,11 +2,11 @@
 
 A local-first data engineering platform for demand forecasting and inventory intelligence.
 
-**Status:** Phase 1 — scaffold complete, no business logic yet.
+**Status:** Phase 2 — raw ingestion complete.
 
 ## What this project does
 
-Ingests retail-like data, models it in layered PostgreSQL schemas, enforces data quality contracts, builds ML-ready feature tables, and trains a simple baseline forecasting model.
+Ingests the [UCI Online Retail II](https://archive.ics.uci.edu/dataset/502/online+retail+ii) dataset (~1M UK e-commerce transactions), models it in layered PostgreSQL schemas, enforces data quality contracts, builds ML-ready feature tables, and trains a simple baseline forecasting model.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
 
@@ -64,17 +64,50 @@ docker compose up -d
 
 The first run creates the `raw`, `staging`, `marts`, and `features` schemas automatically via `sql/init.sql`.
 
-### 4. Run tests
+### 4. Load data
+
+**Option A: Load sample data (quick, no download needed)**
 
 ```bash
 # With Make:
-make test
+make ingest-sample
 
-# Without Make:
-python -m pytest tests/
+# Without Make (PowerShell):
+python -m src.ingestion.load_online_retail --sample
 ```
 
-### 5. Run linter
+**Option B: Download and load the full dataset**
+
+```bash
+# With Make:
+make download
+make ingest
+
+# Without Make (PowerShell):
+python -m src.ingestion.download
+python -m src.ingestion.load_online_retail --file data/online_retail_ii.xlsx
+```
+
+To reload data from scratch, use `--replace`:
+
+```bash
+make ingest-replace
+# or: python -m src.ingestion.load_online_retail --file data/online_retail_ii.xlsx --replace
+```
+
+### 5. Run tests
+
+```bash
+# Unit tests only (no database needed):
+make test
+# PowerShell: python -m pytest tests/ -m "not integration"
+
+# Integration tests (requires running PostgreSQL):
+make test-integration
+# PowerShell: python -m pytest tests/ -m integration
+```
+
+### 6. Run linter
 
 ```bash
 # With Make:
@@ -88,11 +121,14 @@ ruff check src/ tests/
 
 ```
 ├── .github/workflows/   CI pipeline
-├── data/                Sample data files (Phase 2)
+├── data/                Sample data and download target
 ├── docs/                Design docs and stubs
-├── sql/                 Schema definitions
-├── src/                 Python source code
-├── tests/               Test suite
+├── sql/                 Schema definitions (init + raw tables)
+├── src/
+│   ├── ingestion/       Download and load scripts
+│   ├── config.py        Database configuration
+│   └── db.py            Connection helper
+├── tests/               Unit and integration tests
 ├── docker-compose.yml   PostgreSQL service
 ├── pyproject.toml       Python project config
 └── Makefile             Common command shortcuts
@@ -111,7 +147,7 @@ ruff check src/ tests/
 See [ROADMAP.md](ROADMAP.md) for the full plan. Current progress:
 
 - [x] Phase 1: Scaffold
-- [ ] Phase 2: Raw ingestion
+- [x] Phase 2: Raw ingestion
 - [ ] Phase 3: Staging
 - [ ] Phase 4: Marts
 - [ ] Phase 5: Data quality contracts
