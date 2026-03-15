@@ -1,4 +1,4 @@
-.PHONY: up down test test-integration lint format db-init download ingest ingest-replace ingest-sample
+.PHONY: up down test test-integration lint format db-init download ingest ingest-replace ingest-sample staging
 
 up:
 	docker compose up -d
@@ -32,3 +32,6 @@ ingest-replace:
 
 ingest-sample:
 	python -m src.ingestion.load_online_retail --sample
+
+staging:
+	python -m src.staging.build_staging
