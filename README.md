@@ -2,7 +2,7 @@
 
 A local-first data engineering platform for demand forecasting and inventory intelligence.
 
-**Status:** Phase 2 — raw ingestion complete.
+**Status:** Phase 3 — staging complete.
 
 ## What this project does
 
@@ -95,7 +95,21 @@ make ingest-replace
 # or: python -m src.ingestion.load_online_retail --file data/online_retail_ii.xlsx --replace
 ```
 
-### 5. Run tests
+### 5. Build staging layer
+
+Cleans raw data into `staging.stg_online_retail`: deduplicates, casts types, normalizes text, and adds `is_return` / `is_stock_item` flags.
+
+```bash
+# With Make:
+make staging
+
+# Without Make (PowerShell):
+python -m src.staging.build_staging
+```
+
+This is a full refresh — it truncates and rebuilds staging from raw each time.
+
+### 6. Run tests
 
 ```bash
 # Unit tests only (no database needed):
@@ -107,7 +121,7 @@ make test-integration
 # PowerShell: python -m pytest tests/ -m integration
 ```
 
-### 6. Run linter
+### 7. Run linter
 
 ```bash
 # With Make:
@@ -123,9 +137,10 @@ ruff check src/ tests/
 ├── .github/workflows/   CI pipeline
 ├── data/                Sample data and download target
 ├── docs/                Design docs and stubs
-├── sql/                 Schema definitions (init + raw tables)
+├── sql/                 Schema definitions and transformations
 ├── src/
 │   ├── ingestion/       Download and load scripts
+│   ├── staging/         Staging layer build script
 │   ├── config.py        Database configuration
 │   └── db.py            Connection helper
 ├── tests/               Unit and integration tests
@@ -148,7 +163,7 @@ See [ROADMAP.md](ROADMAP.md) for the full plan. Current progress:
 
 - [x] Phase 1: Scaffold
 - [x] Phase 2: Raw ingestion
-- [ ] Phase 3: Staging
+- [x] Phase 3: Staging
 - [ ] Phase 4: Marts
 - [ ] Phase 5: Data quality contracts
 - [ ] Phase 6: Feature registry and feature tables
