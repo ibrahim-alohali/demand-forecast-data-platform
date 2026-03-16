@@ -2,7 +2,7 @@
 
 A local-first data engineering platform for demand forecasting and inventory intelligence.
 
-**Status:** Phase 3 — staging complete.
+**Status:** Phase 4 — marts complete.
 
 ## What this project does
 
@@ -109,7 +109,22 @@ python -m src.staging.build_staging
 
 This is a full refresh — it truncates and rebuilds staging from raw each time.
 
-### 6. Run tests
+### 6. Build marts layer
+
+Aggregates staging data into analytical tables: `marts.fct_daily_product_sales` (daily sales and returns per product per country) and `marts.dim_product` (one row per product).
+
+```bash
+# With Make:
+make marts
+
+# Without Make (PowerShell):
+python -m src.marts.build_marts
+
+# Or build staging + marts together:
+make build-all
+```
+
+### 7. Run tests
 
 ```bash
 # Unit tests only (no database needed):
@@ -121,7 +136,7 @@ make test-integration
 # PowerShell: python -m pytest tests/ -m integration
 ```
 
-### 7. Run linter
+### 8. Run linter
 
 ```bash
 # With Make:
@@ -141,6 +156,7 @@ ruff check src/ tests/
 ├── src/
 │   ├── ingestion/       Download and load scripts
 │   ├── staging/         Staging layer build script
+│   ├── marts/           Mart table build script
 │   ├── config.py        Database configuration
 │   └── db.py            Connection helper
 ├── tests/               Unit and integration tests
@@ -164,7 +180,7 @@ See [ROADMAP.md](ROADMAP.md) for the full plan. Current progress:
 - [x] Phase 1: Scaffold
 - [x] Phase 2: Raw ingestion
 - [x] Phase 3: Staging
-- [ ] Phase 4: Marts
+- [x] Phase 4: Marts
 - [ ] Phase 5: Data quality contracts
 - [ ] Phase 6: Feature registry and feature tables
 - [ ] Phase 7: Baseline model

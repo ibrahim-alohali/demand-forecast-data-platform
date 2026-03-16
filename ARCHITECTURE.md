@@ -82,6 +82,12 @@ Rules:
 
 - avoid hidden logic
 
+Tables:
+- `marts.fct_daily_product_sales` — grain: (stock_code, sale_date, country). Aggregates sales and returns separately.
+- `marts.dim_product` — grain: stock_code. Tracks description, date range, and country reach.
+
+No customer dimension is built. About 25% of the dataset has null customer_id, and demand forecasting focuses on product-by-time patterns rather than customer segmentation. A customer dimension would be mostly incomplete and not useful for the downstream feature tables.
+
 ### Data Quality Contracts
 Purpose:
 Make critical assumptions explicit and testable.
