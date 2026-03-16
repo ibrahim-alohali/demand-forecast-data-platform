@@ -1,4 +1,4 @@
-.PHONY: up down test test-integration lint format db-init download ingest ingest-replace ingest-sample staging
+.PHONY: up down test test-integration lint format db-init download ingest ingest-replace ingest-sample staging marts build-all
 
 up:
 	docker compose up -d
@@ -35,3 +35,8 @@ ingest-sample:
 
 staging:
 	python -m src.staging.build_staging
+
+marts:
+	python -m src.marts.build_marts
+
+build-all: staging marts
