@@ -4,39 +4,45 @@
 
 Data quality contracts are explicit, testable rules that validate critical assumptions about important tables. They catch problems before bad data reaches downstream models or feature tables.
 
-This project uses lightweight Python-based checks rather than a heavy framework. Each contract is a function that queries a table and raises an error if the data violates expectations.
+This project uses lightweight Python-based checks rather than a heavy framework. Each contract is a function that queries a table and returns a pass/fail result with a human-readable message.
 
 ## When contracts are applied
 
-Contracts validate data at layer boundaries:
+Contracts validate data at layer boundaries after staging and marts are built. They run before any downstream feature generation or modelling.
 
-- **raw → staging**: Did we load what we expected? Are primary keys present?
-- **staging → marts**: Are types correct? Are values within expected ranges?
-- **marts → features**: Are grains unique? Are timestamps non-null?
+Run contracts with:
 
-## Contract types
+```bash
+make quality
+# or: python -m src.quality.run_contracts
+```
 
-| Check type | What it validates | Example |
-|------------|-------------------|---------|
-| Not null | Required columns are never null | `order_date IS NOT NULL` |
-| Uniqueness | Primary keys have no duplicates | `COUNT(*) = COUNT(DISTINCT id)` |
-| Accepted values | Categorical columns contain only valid values | `status IN ('pending', 'shipped', 'delivered')` |
-| Freshness | Recently loaded data exists | `MAX(loaded_at) >= NOW() - INTERVAL '24 hours'` |
-| Row count | Table is not suspiciously empty | `COUNT(*) > 0` |
-
-## Implementation plan
-
-Contracts will be implemented in Phase 5 as Python functions in `src/quality/`. Each contract:
-
-- targets a specific table and schema
-- returns a pass/fail result with a human-readable message
-- can be run as part of the test suite via pytest
-- is documented here with its rationale
+The runner exits 0 if all contracts pass, 1 if any fail.
 
 ## Contract registry
 
-*To be populated in Phase 5. Each entry will include:*
+| # | Table | Check | Rule | Rationale |
+|---|-------|-------|------|-----------|
+| 1 | staging.stg_online_retail | row_count | `COUNT(*) > 0` | Empty staging breaks everything downstream |
+| 2 | staging.stg_online_retail | not_null_core | `invoice, stock_code, quantity, invoice_date, price, country IS NOT NULL` | These feed NOT NULL constraints in marts; catch issues before constraint errors |
+| 3 | staging.stg_online_retail | positive_price | `price >= 0` for all rows | Negative prices are nonsensical; returns use negative quantity, not negative price |
+| 4 | staging.stg_online_retail | valid_customer_id | `customer_id > 0` where not NULL | customer_id should be a positive integer when present |
+| 5 | staging.stg_online_retail | boolean_flags_not_null | `is_return IS NOT NULL AND is_stock_item IS NOT NULL` | Downstream filtering depends on these flags |
+| 6 | marts.fct_daily_product_sales | row_count | `COUNT(*) > 0` | Empty fact table means features have nothing to work with |
+| 7 | marts.fct_daily_product_sales | grain_uniqueness | `COUNT(*) = COUNT(DISTINCT (stock_code, sale_date, country))` | Duplicate grains break aggregations and forecasting |
+| 8 | marts.fct_daily_product_sales | non_negative_quantities | `total_quantity >= 0 AND return_quantity >= 0` | Negative aggregated quantities indicate a transformation bug |
+| 9 | marts.fct_daily_product_sales | non_negative_revenue | `total_revenue >= 0 AND return_revenue >= 0` | Negative aggregated revenue indicates a transformation bug |
+| 10 | marts.dim_product | primary_key_unique | `COUNT(*) = COUNT(DISTINCT stock_code)` | Dimension must have one row per product |
+| 11 | marts.dim_product | date_ordering | `first_seen <= last_seen` for all rows | Inverted dates indicate a transformation bug |
 
-| Table | Check | Rule | Rationale |
-|-------|-------|------|-----------|
-| *(example)* staging.orders | not_null | `order_date IS NOT NULL` | Downstream features require valid dates |
+## What is not checked
+
+- **Raw table contracts**: Raw preserves source data as-is. Contracts belong at layer boundaries, not on raw.
+- **Freshness checks**: This is a local full-refresh pipeline. Freshness is meaningless in this context.
+- **Feature table contracts**: Will be added in Phase 6 when feature tables are built.
+
+## Implementation
+
+Contracts live in `src/quality/contracts.py`. Each is a function that takes a psycopg connection and returns a `ContractResult` dataclass with: table, check_name, passed, message.
+
+The CLI runner (`src/quality/run_contracts.py`) executes all contracts and prints a summary table. Integration tests in `tests/test_contracts_integration.py` verify all contracts pass on sample data.
