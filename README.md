@@ -2,7 +2,7 @@
 
 A local-first data engineering platform for demand forecasting and inventory intelligence.
 
-**Status:** Phase 4 — marts complete.
+**Status:** Phase 5 — data quality contracts complete.
 
 ## What this project does
 
@@ -124,7 +124,21 @@ python -m src.marts.build_marts
 make build-all
 ```
 
-### 7. Run tests
+### 7. Run data quality contracts
+
+Validates critical assumptions about staging and marts tables (11 contracts). See [docs/data_quality_contracts.md](docs/data_quality_contracts.md) for the full registry.
+
+```bash
+# With Make:
+make quality
+
+# Without Make (PowerShell):
+python -m src.quality.run_contracts
+```
+
+Exits 0 if all contracts pass, 1 if any fail.
+
+### 8. Run tests
 
 ```bash
 # Unit tests only (no database needed):
@@ -136,7 +150,7 @@ make test-integration
 # PowerShell: python -m pytest tests/ -m integration
 ```
 
-### 8. Run linter
+### 9. Run linter
 
 ```bash
 # With Make:
@@ -157,6 +171,7 @@ ruff check src/ tests/
 │   ├── ingestion/       Download and load scripts
 │   ├── staging/         Staging layer build script
 │   ├── marts/           Mart table build script
+│   ├── quality/         Data quality contracts
 │   ├── config.py        Database configuration
 │   └── db.py            Connection helper
 ├── tests/               Unit and integration tests
@@ -181,7 +196,7 @@ See [ROADMAP.md](ROADMAP.md) for the full plan. Current progress:
 - [x] Phase 2: Raw ingestion
 - [x] Phase 3: Staging
 - [x] Phase 4: Marts
-- [ ] Phase 5: Data quality contracts
+- [x] Phase 5: Data quality contracts
 - [ ] Phase 6: Feature registry and feature tables
 - [ ] Phase 7: Baseline model
 - [ ] Phase 8: Polish
