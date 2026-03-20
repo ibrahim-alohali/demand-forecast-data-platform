@@ -33,6 +33,7 @@ docker-data/
 data/*.csv
 data/*.parquet
 data/*.json
+data/*.md
 data/*.xlsx
 data/*.zip
 !data/.gitkeep

@@ -1,4 +1,4 @@
-.PHONY: up down test test-integration lint format db-init download ingest ingest-replace ingest-sample staging marts features build-all quality validate-registry
+.PHONY: up down test test-integration lint format db-init download ingest ingest-replace ingest-sample staging marts features build-all quality validate-registry train
 
 up:
 	docker compose up -d
@@ -49,3 +49,6 @@ validate-registry:
 
 quality:
 	python -m src.quality.run_contracts
+
+train:
+	python -m src.model.train_baseline
