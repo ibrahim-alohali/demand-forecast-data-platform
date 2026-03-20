@@ -8,6 +8,7 @@ dependencies = [
     "python-dotenv",
     "pandas",
     "openpyxl",
+    "pyyaml",
 ]
 
 [project.optional-dependencies]
