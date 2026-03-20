@@ -9,6 +9,7 @@ dependencies = [
     "pandas",
     "openpyxl",
     "pyyaml",
+    "scikit-learn",
 ]
 
 [project.optional-dependencies]

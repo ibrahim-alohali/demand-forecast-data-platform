@@ -2,7 +2,7 @@
 
 A local-first data engineering platform for demand forecasting and inventory intelligence.
 
-**Status:** Phase 6 — feature registry and feature tables complete.
+**Status:** Phase 7 — baseline model complete.
 
 ## What this project does
 
@@ -140,7 +140,19 @@ make validate-registry
 # or: python -m src.features.validate_registry
 ```
 
-### 8. Run data quality contracts
+### 8. Train baseline model
+
+Trains a linear regression on the feature table, evaluates on a held-out set, and saves results to `data/model_evaluation.json` and `data/model_report.md`.
+
+```bash
+# With Make:
+make train
+
+# Without Make (PowerShell):
+python -m src.model.train_baseline
+```
+
+### 9. Run data quality contracts
 
 Validates critical assumptions about staging and marts tables (11 contracts). See [docs/data_quality_contracts.md](docs/data_quality_contracts.md) for the full registry.
 
@@ -154,7 +166,7 @@ python -m src.quality.run_contracts
 
 Exits 0 if all contracts pass, 1 if any fail.
 
-### 9. Run tests
+### 10. Run tests
 
 ```bash
 # Unit tests only (no database needed):
@@ -166,7 +178,7 @@ make test-integration
 # PowerShell: python -m pytest tests/ -m integration
 ```
 
-### 10. Run linter
+### 11. Run linter
 
 ```bash
 # With Make:
@@ -189,6 +201,7 @@ ruff check src/ tests/
 │   ├── marts/           Mart table build script
 │   ├── quality/         Data quality contracts
 │   ├── features/        Feature build, registry, and validation
+│   ├── model/           Baseline model training and evaluation
 │   ├── config.py        Database configuration
 │   └── db.py            Connection helper
 ├── tests/               Unit and integration tests
@@ -215,5 +228,5 @@ See [ROADMAP.md](ROADMAP.md) for the full plan. Current progress:
 - [x] Phase 4: Marts
 - [x] Phase 5: Data quality contracts
 - [x] Phase 6: Feature registry and feature tables
-- [ ] Phase 7: Baseline model
+- [x] Phase 7: Baseline model
 - [ ] Phase 8: Polish
