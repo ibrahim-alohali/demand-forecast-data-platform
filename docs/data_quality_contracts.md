@@ -39,7 +39,7 @@ The runner exits 0 if all contracts pass, 1 if any fail.
 
 - **Raw table contracts**: Raw preserves source data as-is. Contracts belong at layer boundaries, not on raw.
 - **Freshness checks**: This is a local full-refresh pipeline. Freshness is meaningless in this context.
-- **Feature table contracts**: Will be added in Phase 6 when feature tables are built.
+- **Feature table contracts**: Not added. The feature table is a downstream consumer built from validated marts tables. Quality is enforced at the staging and marts boundaries.
 
 ## Implementation
 
