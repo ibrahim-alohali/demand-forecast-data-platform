@@ -1,0 +1,72 @@
+features:
+  - name: total_quantity
+    description: "Total units sold for this product-day-country"
+    source_table: marts.fct_daily_product_sales
+    grain: stock_code, sale_date, country
+    transform: "passthrough"
+    leakage_risk: none
+    downstream_use: baseline demand forecast
+
+  - name: total_revenue
+    description: "Total revenue for this product-day-country"
+    source_table: marts.fct_daily_product_sales
+    grain: stock_code, sale_date, country
+    transform: "passthrough"
+    leakage_risk: none
+    downstream_use: baseline demand forecast
+
+  - name: return_quantity
+    description: "Total units returned for this product-day-country"
+    source_table: marts.fct_daily_product_sales
+    grain: stock_code, sale_date, country
+    transform: "passthrough"
+    leakage_risk: none
+    downstream_use: return rate analysis
+
+  - name: transaction_count
+    description: "Number of distinct invoices for this product-day-country"
+    source_table: marts.fct_daily_product_sales
+    grain: stock_code, sale_date, country
+    transform: "passthrough"
+    leakage_risk: none
+    downstream_use: demand frequency signal
+
+  - name: avg_unit_price
+    description: "Revenue per unit sold (NULL when quantity is 0)"
+    source_table: marts.fct_daily_product_sales
+    grain: stock_code, sale_date, country
+    transform: "total_revenue / NULLIF(total_quantity, 0)"
+    leakage_risk: none
+    downstream_use: price sensitivity features
+
+  - name: rolling_7d_quantity
+    description: "7-day rolling average of daily quantity sold"
+    source_table: marts.fct_daily_product_sales
+    grain: stock_code, sale_date, country
+    transform: "AVG(total_quantity) OVER (PARTITION BY stock_code, country ORDER BY sale_date ROWS 6 PRECEDING)"
+    leakage_risk: none
+    downstream_use: demand trend signal
+
+  - name: rolling_7d_revenue
+    description: "7-day rolling average of daily revenue"
+    source_table: marts.fct_daily_product_sales
+    grain: stock_code, sale_date, country
+    transform: "AVG(total_revenue) OVER (PARTITION BY stock_code, country ORDER BY sale_date ROWS 6 PRECEDING)"
+    leakage_risk: none
+    downstream_use: revenue trend signal
+
+  - name: days_since_first_seen
+    description: "Days between sale_date and the product's first appearance in the dataset"
+    source_table: marts.dim_product
+    grain: stock_code, sale_date, country
+    transform: "sale_date - dim_product.first_seen"
+    leakage_risk: none
+    downstream_use: product maturity signal
+
+  - name: distinct_countries
+    description: "Number of distinct countries the product has been sold in"
+    source_table: marts.dim_product
+    grain: stock_code, sale_date, country
+    transform: "passthrough from dim_product"
+    leakage_risk: low
+    downstream_use: product reach indicator

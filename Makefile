@@ -1,4 +1,4 @@
-.PHONY: up down test test-integration lint format db-init download ingest ingest-replace ingest-sample staging marts build-all quality
+.PHONY: up down test test-integration lint format db-init download ingest ingest-replace ingest-sample staging marts features build-all quality validate-registry
 
 up:
 	docker compose up -d
@@ -39,7 +39,13 @@ staging:
 marts:
 	python -m src.marts.build_marts
 
-build-all: staging marts
+features:
+	python -m src.features.build_features
+
+build-all: staging marts features
+
+validate-registry:
+	python -m src.features.validate_registry
 
 quality:
 	python -m src.quality.run_contracts

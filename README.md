@@ -2,7 +2,7 @@
 
 A local-first data engineering platform for demand forecasting and inventory intelligence.
 
-**Status:** Phase 5 — data quality contracts complete.
+**Status:** Phase 6 — feature registry and feature tables complete.
 
 ## What this project does
 
@@ -120,11 +120,27 @@ make marts
 # Without Make (PowerShell):
 python -m src.marts.build_marts
 
-# Or build staging + marts together:
+# Or build staging + marts + features together:
 make build-all
 ```
 
-### 7. Run data quality contracts
+### 7. Build feature tables
+
+Joins marts tables into `features.product_daily_features`: passthrough columns, derived price, rolling averages, and product metadata. See [docs/feature_registry.md](docs/feature_registry.md) for the full feature list.
+
+```bash
+# With Make:
+make features
+
+# Without Make (PowerShell):
+python -m src.features.build_features
+
+# Validate that registry.yml matches the table columns:
+make validate-registry
+# or: python -m src.features.validate_registry
+```
+
+### 8. Run data quality contracts
 
 Validates critical assumptions about staging and marts tables (11 contracts). See [docs/data_quality_contracts.md](docs/data_quality_contracts.md) for the full registry.
 
@@ -138,7 +154,7 @@ python -m src.quality.run_contracts
 
 Exits 0 if all contracts pass, 1 if any fail.
 
-### 8. Run tests
+### 9. Run tests
 
 ```bash
 # Unit tests only (no database needed):
@@ -150,7 +166,7 @@ make test-integration
 # PowerShell: python -m pytest tests/ -m integration
 ```
 
-### 9. Run linter
+### 10. Run linter
 
 ```bash
 # With Make:
@@ -172,6 +188,7 @@ ruff check src/ tests/
 │   ├── staging/         Staging layer build script
 │   ├── marts/           Mart table build script
 │   ├── quality/         Data quality contracts
+│   ├── features/        Feature build, registry, and validation
 │   ├── config.py        Database configuration
 │   └── db.py            Connection helper
 ├── tests/               Unit and integration tests
@@ -197,6 +214,6 @@ See [ROADMAP.md](ROADMAP.md) for the full plan. Current progress:
 - [x] Phase 3: Staging
 - [x] Phase 4: Marts
 - [x] Phase 5: Data quality contracts
-- [ ] Phase 6: Feature registry and feature tables
+- [x] Phase 6: Feature registry and feature tables
 - [ ] Phase 7: Baseline model
 - [ ] Phase 8: Polish
