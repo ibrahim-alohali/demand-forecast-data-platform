@@ -159,7 +159,7 @@ Rules:
 
 - notebooks/ optional and limited, only if truly useful
 
-- .github/workflows/ for CI later
+- .github/workflows/ for CI
 
 
 
@@ -207,7 +207,7 @@ These are deferred until the project works:
 
 - Docker Compose
 
-- SQLAlchemy or equivalent DB layer
+- psycopg (v3)
 
 - Pandas for data preparation where appropriate
 

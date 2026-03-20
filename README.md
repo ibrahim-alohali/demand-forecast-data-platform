@@ -2,7 +2,7 @@
 
 A local-first data engineering platform for demand forecasting and inventory intelligence.
 
-**Status:** Phase 7 — baseline model complete.
+**Status:** Phase 8 — complete.
 
 ## What this project does
 
@@ -193,7 +193,7 @@ ruff check src/ tests/
 ```
 ├── .github/workflows/   CI pipeline
 ├── data/                Sample data and download target
-├── docs/                Design docs and stubs
+├── docs/                Design docs
 ├── sql/                 Schema definitions and transformations
 ├── src/
 │   ├── ingestion/       Download and load scripts
@@ -229,4 +229,4 @@ See [ROADMAP.md](ROADMAP.md) for the full plan. Current progress:
 - [x] Phase 5: Data quality contracts
 - [x] Phase 6: Feature registry and feature tables
 - [x] Phase 7: Baseline model
-- [ ] Phase 8: Polish
+- [x] Phase 8: Polish

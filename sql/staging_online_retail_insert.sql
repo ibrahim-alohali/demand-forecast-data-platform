@@ -40,7 +40,7 @@ SELECT
     TRIM(country) AS country,
     (invoice LIKE 'C%') AS is_return,
     (TRIM(UPPER(stock_code)) NOT IN (
-        'POST', 'DOT', 'D', 'M', 'BANK CHARGES',
+        'POST', 'DOT', 'D', 'M', 'B', 'BANK CHARGES',
         'PADS', 'AMAZONFEE', 'C2', 'CRUK'
     )) AS is_stock_item
 FROM (
