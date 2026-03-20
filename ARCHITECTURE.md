@@ -26,41 +26,11 @@ Keep the system simple, layered, reproducible, and easy to explain.
 
 ### Raw
 
-Purpose:
-
-Store source data with minimal change.
-
-
-
-Rules:
-
-- preserve source columns when possible
-
-- track load timestamp
-
-- do not apply business logic here
-
-
+Stores source data with minimal change. Source columns are preserved as-is, each row gets a load timestamp, and no business logic is applied here.
 
 ### Staging
 
-Purpose:
-
-Clean and standardize raw data.
-
-
-
-Rules:
-
-- fix types
-
-- normalize names
-
-- handle missing values
-
-- remove obvious bad records carefully
-
-- keep transformations transparent
+Cleans and standardizes raw data: fixes types, normalizes names, handles missing values, and removes obviously broken records. All transformations are kept transparent so the cleaning logic is easy to audit.
 
 
 
@@ -179,43 +149,13 @@ Rules:
 
 
 
-## Not approved yet
+## Out of scope
 
-These are deferred until the project works:
+This project is intentionally local-first and single-person. dbt, Prefect, Airflow, cloud deployment, streaming, and web UIs are all out of scope unless explicitly added later.
 
-- dbt
+## Stack
 
-- Prefect
-
-- Airflow
-
-- cloud deployment
-
-- web UI
-
-- advanced monitoring
-
-- streaming
-
-
-
-## Likely technical building blocks
-
-- Python
-
-- PostgreSQL
-
-- Docker Compose
-
-- psycopg (v3)
-
-- Pandas for data preparation where appropriate
-
-- Pytest
-
-- Ruff
-
-- basic CI
+Python, PostgreSQL, Docker Compose, psycopg v3, pytest, ruff.
 
 
 

@@ -6,7 +6,7 @@ A local-first data engineering platform for demand forecasting and inventory int
 
 ## What this project does
 
-Ingests the [UCI Online Retail II](https://archive.ics.uci.edu/dataset/502/online+retail+ii) dataset (~1M UK e-commerce transactions), models it in layered PostgreSQL schemas, enforces data quality contracts, builds ML-ready feature tables, and trains a simple baseline forecasting model.
+Loads the [UCI Online Retail II](https://archive.ics.uci.edu/dataset/502/online+retail+ii) dataset (~1M UK e-commerce transactions) into a layered PostgreSQL warehouse. It cleans and models the data through raw, staging, and marts layers, then builds ML-ready feature tables and trains a baseline forecasting model.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
 
@@ -34,7 +34,7 @@ Optional: `make` (available via Git Bash on Windows, or install via `choco insta
 ### 1. Clone and configure
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/ibrahim-alohali/demand-forecast-data-platform.git
 cd demand-forecast-data-platform
 cp .env.example .env          # Linux / Mac / Git Bash
 # Copy-Item .env.example .env  # PowerShell
@@ -213,7 +213,6 @@ ruff check src/ tests/
 ## Documentation
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — system design and layer definitions
-- [PROJECT_BRIEF.md](PROJECT_BRIEF.md) — project goals and constraints
 - [ROADMAP.md](ROADMAP.md) — phased delivery plan
 - [docs/data_quality_contracts.md](docs/data_quality_contracts.md) — data quality approach
 - [docs/feature_registry.md](docs/feature_registry.md) — feature registry approach

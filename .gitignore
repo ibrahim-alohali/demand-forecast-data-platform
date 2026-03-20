@@ -50,5 +50,6 @@ htmlcov/
 .coverage
 .coverage.*
 
-# Personal
-.claude/settings.local.json
+# Claude Code
+CLAUDE.md
+.claude/
