@@ -2,7 +2,6 @@
 
 A local-first data engineering platform for demand forecasting and inventory intelligence.
 
-**Status:** Phase 8 — complete.
 
 ## What this project does
 
