@@ -1,3 +1,5 @@
+[![CI](https://github.com/ibrahim-alohali/demand-forecast-data-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/ibrahim-alohali/demand-forecast-data-platform/actions/workflows/ci.yml)
+
 # demand-forecast-data-platform
 
 A local-first data engineering platform for demand forecasting and inventory intelligence.
@@ -19,6 +21,21 @@ Source data
   → features schema  (ML-ready feature tables, documented in registry)
   → baseline model   (simple forecast to prove pipeline usefulness)
 ```
+
+## Sample pipeline run
+
+Output from running the full pipeline on the 100-row sample dataset:
+
+```
+Raw:      100 rows loaded
+Staging:  99 rows (1 duplicate removed)
+Marts:    89 fact rows, 83 product dimension rows
+Features: 89 feature rows
+Quality:  11/11 contracts passed
+Model:    MAE=0.0, RMSE=0.0, R²=1.0 (single-day sample)
+```
+
+On the full UCI dataset (1,067,371 rows), the pipeline produces 1,033,036 staging rows, 593,206 daily fact rows, and 5,295 products. The baseline model scores R²=0.85 with a time-based train/test split across 739 days of transaction data.
 
 ## Prerequisites
 
