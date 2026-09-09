@@ -1,247 +1,185 @@
 [![CI](https://github.com/ibrahim-alohali/demand-forecast-data-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/ibrahim-alohali/demand-forecast-data-platform/actions/workflows/ci.yml)
 
-# demand-forecast-data-platform
+# Demand Forecast Data Platform
 
-A local-first data engineering platform for demand forecasting and inventory intelligence.
+A Python and PostgreSQL project that turns retail transaction files into analytical tables and evaluates next-day **recorded paid gross sales quantity** for each product and country.
 
+The work covers source validation, cleaning decisions, SQL aggregation, data quality checks and forecasting evaluation. It uses the public [UCI Online Retail II dataset](DATA_SOURCE.md). Recorded sales and cancellations remain separate; the project does not estimate stock availability or unmet demand.
 
-## What this project does
+[Project walkthrough](docs/WALKTHROUGH.md) · [Architecture](ARCHITECTURE.md) · [Verification](docs/VERIFICATION.md)
 
-Loads the [UCI Online Retail II](https://archive.ics.uci.edu/dataset/502/online+retail+ii) dataset (~1M UK e-commerce transactions) into a layered PostgreSQL warehouse. It cleans and models the data through raw, staging, and marts layers, then builds ML-ready feature tables and trains a baseline forecasting model.
+## Verified full-workbook results
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
+| Stage | Result |
+|---|---:|
+| Raw source rows across two worksheets | 1,067,371 |
+| Staging rows after disclosed exclusions and exact duplicate removal | 1,033,031 |
+| Eligible paid sale/cancellation lines | 1,021,517 |
+| Daily product-country fact rows | 589,055 |
+| Products in the dimension | 4,920 |
+| Product-country series | 28,353 |
+| Calendar feature rows | 12,286,085 |
 
-## Architecture overview
+An independent read-only reconstruction from the original workbook matched every fact group's quantities, sterling amounts and invoice counts, plus each product's date range and country count. The final marts contain **11,188,217 gross paid units (£19,655,609.62)** and **467,874 cancellation units (£724,708.68)**. See [source reconciliation and limitations](DATA_SOURCE.md).
 
-```
-Source data
-  → raw schema       (preserve source data as-is)
-  → staging schema   (clean types, normalize names, handle nulls)
-  → marts schema     (analytical tables with clear grains)
-  → features schema  (ML-ready feature tables, documented in registry)
-  → baseline model   (simple forecast to prove pipeline usefulness)
-```
+The model uses the previous day, the previous weekday, the preceding seven-day mean and the target day's known weekday. It excludes 198,013 rows without sufficient history.
 
-## Sample pipeline run
+| Method | MAE | RMSE | R² |
+|---|---:|---:|---:|
+| Linear regression | 1.3264 | 11.1440 | 0.0609 |
+| Previous day | 1.0718 | 14.9024 | -0.6794 |
+| Previous weekday | 1.0182 | 14.3743 | -0.5625 |
 
-Output from running the full pipeline on the 100-row sample dataset:
+All three methods use the same **3,754,801 evaluation rows**, from **2011-07-16 to 2011-12-09**. Training uses 8,333,271 rows from 2009-12-08 to 2011-07-15. MAE and RMSE are units per product-country-day. Linear regression has lower RMSE but worse MAE than both simple comparators; this is one chronological evaluation, not evidence of consistent superiority.
 
-```
-Raw:      100 rows loaded
-Staging:  99 rows (1 duplicate removed)
-Marts:    89 fact rows, 83 product dimension rows
-Features: 89 feature rows
-Quality:  11/11 contracts passed
-Model:    MAE=0.0, RMSE=0.0, R²=1.0 (single-day sample)
-```
+Read the [full model report](docs/full_model_report.md) and [evaluation JSON](docs/full_model_evaluation.json) for coverage, coefficients and error examples.
 
-On the full UCI dataset (1,067,371 rows), the pipeline produces 1,033,036 staging rows, 593,206 daily fact rows, and 5,295 products. The baseline model scores R²=0.85 with a time-based train/test split across 739 days of transaction data.
+The included 100-row, single-day sample produces 99 staging rows, 89 fact/feature rows and 83 products. Its forecasting status is **`not_evaluable`**, with null scores: one day cannot support a seven-day-history forecast evaluation.
 
-## Prerequisites
+## Run locally with PowerShell 7
 
-- Python 3.11
-- Docker Desktop (includes Docker Compose)
-- Git
+Requirements: Python 3.11, Git, Docker Desktop with Docker Compose, and PowerShell 7. The full run materializes over 12 million feature rows; start with the sample to check your setup.
 
-Optional: `make` (available via Git Bash on Windows, or install via `choco install make`)
+The `&&` chains below stop when a command fails. Fix that failure before continuing to another block. These instructions start from a fresh checkout; keep your existing `.env` if you already configured the project.
 
-## Quickstart
+### 1. Install and start PostgreSQL
 
-### 1. Clone and configure
+~~~powershell
+git clone https://github.com/ibrahim-alohali/demand-forecast-data-platform.git &&
+Set-Location demand-forecast-data-platform &&
+py -3.11 -m venv .venv &&
+./.venv/Scripts/python.exe -m pip install -e ".[dev]" &&
+Copy-Item .env.example .env
+~~~
 
-```bash
-git clone https://github.com/ibrahim-alohali/demand-forecast-data-platform.git
-cd demand-forecast-data-platform
-cp .env.example .env          # Linux / Mac / Git Bash
-# Copy-Item .env.example .env  # PowerShell
-```
+Review `.env` before starting Docker if you need different connection settings. Its defaults are for a local demonstration. Existing `POSTGRES_*` environment variables override `.env`; clear any previous test overrides before a normal run.
 
-### 2. Create a virtual environment and install dependencies
+~~~powershell
+docker compose up -d --wait
+~~~
 
-```bash
-python -m venv .venv
+On the first start of a new database volume, `sql/init.sql` creates the raw, staging, marts and features schemas.
 
-# Activate:
-source .venv/bin/activate       # Linux / Mac / Git Bash
-# .venv\Scripts\activate        # PowerShell
+A fresh editable install passed all **142 tests** and Ruff. To reproduce the package versions used for the published full-run metrics, install the [recorded requirements](docs/full_run_requirements.txt) into your own virtual environment after the editable install:
 
-pip install -e ".[dev]"
-```
+~~~powershell
+./.venv/Scripts/python.exe -m pip install -r docs/full_run_requirements.txt
+~~~
 
-### 3. Start PostgreSQL
+### 2. Run the sample
 
-```bash
-# With Make:
-make up
+~~~powershell
+./.venv/Scripts/python.exe -m src.ingestion.load_online_retail --sample &&
+./.venv/Scripts/python.exe -m src.staging.build_staging &&
+./.venv/Scripts/python.exe -m src.marts.build_marts &&
+./.venv/Scripts/python.exe -m src.quality.run_contracts &&
+./.venv/Scripts/python.exe -m src.features.build_features &&
+./.venv/Scripts/python.exe -m src.features.validate_registry &&
+./.venv/Scripts/python.exe -m src.model.train_baseline --output-dir data/sample --source-file data/sample_online_retail.csv
+~~~
 
-# Without Make:
-docker compose up -d
-```
+Open `data/sample/model_evaluation.json` and `data/sample/model_report.md`. Expect `not_evaluable`, not a numerical forecasting score.
 
-The first run creates the `raw`, `staging`, `marts`, and `features` schemas automatically via `sql/init.sql`.
+Ingestion defaults to safe mode and refuses a nonempty raw table. For an intentional sample reload, change the first command to `--sample --replace`. Replacement changes that database's raw contents; `--append` deliberately keeps existing rows and adds every input row.
 
-### 4. Load data
+### 3. Run the full workbook in a separate database
 
-**Option A: Load sample data (quick, no download needed)**
+Create this empty database once in the same PostgreSQL container, keeping the sample database intact:
 
-```bash
-# With Make:
-make ingest-sample
+~~~powershell
+docker compose exec db sh -c 'createdb -U "$POSTGRES_USER" demand_forecast_full'
+~~~
 
-# Without Make (PowerShell):
-python -m src.ingestion.load_online_retail --sample
-```
+If it already exists, inspect the existing data before choosing a reload. The first full load below uses safe mode.
 
-**Option B: Download and load the full dataset**
-
-```bash
-# With Make:
-make download
-make ingest
-
-# Without Make (PowerShell):
-python -m src.ingestion.download
-python -m src.ingestion.load_online_retail --file data/online_retail_ii.xlsx
-```
-
-To reload data from scratch, use `--replace`:
-
-```bash
-make ingest-replace
-# or: python -m src.ingestion.load_online_retail --file data/online_retail_ii.xlsx --replace
-```
-
-### 5. Build staging layer
-
-Cleans raw data into `staging.stg_online_retail`: deduplicates, casts types, normalizes text, and adds `is_return` / `is_stock_item` flags.
-
-```bash
-# With Make:
-make staging
-
-# Without Make (PowerShell):
-python -m src.staging.build_staging
-```
-
-This is a full refresh — it truncates and rebuilds staging from raw each time.
-
-### 6. Build marts layer
-
-Aggregates staging data into analytical tables: `marts.fct_daily_product_sales` (daily sales and returns per product per country) and `marts.dim_product` (one row per product).
-
-```bash
-# With Make:
-make marts
-
-# Without Make (PowerShell):
-python -m src.marts.build_marts
-
-# Or build staging + marts + features together:
-make build-all
-```
-
-### 7. Build feature tables
-
-Joins marts tables into `features.product_daily_features`: passthrough columns, derived price, rolling averages, and product metadata. See [docs/feature_registry.md](docs/feature_registry.md) for the full feature list.
-
-```bash
-# With Make:
-make features
-
-# Without Make (PowerShell):
-python -m src.features.build_features
-
-# Validate that registry.yml matches the table columns:
-make validate-registry
-# or: python -m src.features.validate_registry
-```
-
-### 8. Train baseline model
-
-Trains a linear regression on the feature table, evaluates on a held-out set, and saves results to `data/model_evaluation.json` and `data/model_report.md`.
-
-```bash
-# With Make:
-make train
-
-# Without Make (PowerShell):
-python -m src.model.train_baseline
-```
-
-### 9. Run data quality contracts
-
-Validates critical assumptions about staging and marts tables (11 contracts). See [docs/data_quality_contracts.md](docs/data_quality_contracts.md) for the full registry.
-
-```bash
-# With Make:
-make quality
-
-# Without Make (PowerShell):
-python -m src.quality.run_contracts
-```
-
-Exits 0 if all contracts pass, 1 if any fail.
-
-### 10. Run tests
-
-```bash
-# Unit tests only (no database needed):
-make test
-# PowerShell: python -m pytest tests/ -m "not integration"
-
-# Integration tests (requires running PostgreSQL):
-make test-integration
-# PowerShell: python -m pytest tests/ -m integration
-```
-
-### 11. Run linter
-
-```bash
-# With Make:
-make lint
-
-# Without Make:
-ruff check src/ tests/
-```
-
-## Project structure
-
-```
-├── .github/workflows/   CI pipeline
-├── data/                Sample data and download target
-├── docs/                Design docs
-├── sql/                 Schema definitions and transformations
-├── src/
-│   ├── ingestion/       Download and load scripts
-│   ├── staging/         Staging layer build script
-│   ├── marts/           Mart table build script
-│   ├── quality/         Data quality contracts
-│   ├── features/        Feature build, registry, and validation
-│   ├── model/           Baseline model training and evaluation
-│   ├── config.py        Database configuration
-│   └── db.py            Connection helper
-├── tests/               Unit and integration tests
-├── docker-compose.yml   PostgreSQL service
-├── pyproject.toml       Python project config
-└── Makefile             Common command shortcuts
-```
+~~~powershell
+$env:POSTGRES_DB = "demand_forecast_full"
+try {
+    @'
+from pathlib import Path
+from src.db import get_connection
+with get_connection() as conn:
+    conn.execute(Path("sql/init.sql").read_text())
+'@ | ./.venv/Scripts/python.exe -
+    if ($LASTEXITCODE -ne 0) { throw "Database initialization failed." }
+
+    ./.venv/Scripts/python.exe -m src.ingestion.download &&
+    ./.venv/Scripts/python.exe -m src.ingestion.load_online_retail --file data/online_retail_ii.xlsx &&
+    ./.venv/Scripts/python.exe -m src.staging.build_staging &&
+    ./.venv/Scripts/python.exe -m src.marts.build_marts &&
+    ./.venv/Scripts/python.exe -m src.quality.run_contracts &&
+    ./.venv/Scripts/python.exe -m src.features.build_features &&
+    ./.venv/Scripts/python.exe -m src.features.validate_registry &&
+    ./.venv/Scripts/python.exe -m src.model.train_baseline --output-dir data/full --source-file data/online_retail_ii.xlsx
+} finally {
+    Remove-Item Env:POSTGRES_DB -ErrorAction SilentlyContinue
+}
+~~~
+
+The downloader retains an existing workbook. The [source record](DATA_SOURCE.md) gives the expected checksum and explains the canonical download filename. Keep the input workbook unchanged; each evaluation records its checksum and the loaded source sheets.
+
+An intentional rerun can use `--replace` on the ingestion command. Each layer refresh is transactional, and both mart tables publish together. The whole pipeline is not one transaction: after a later failure, earlier completed layers may already be updated. Stop, resolve the cause and rebuild downstream layers before interpreting their results.
+
+### 4. Run checks in an isolated test database
+
+Unit tests and lint do not require PostgreSQL:
+
+~~~powershell
+./.venv/Scripts/python.exe -m pytest tests/ -m "not integration" &&
+./.venv/Scripts/python.exe -m ruff check src/ tests/
+~~~
+
+Integration tests truncate tables. Create a disposable PostgreSQL 16 container with its own data storage and localhost port:
+
+~~~powershell
+docker run --detach --rm --name forecast-integration-tests `
+  --publish 127.0.0.1:55433:5432 `
+  --env POSTGRES_USER=forecast_test `
+  --env POSTGRES_PASSWORD=forecast_test_local `
+  --env POSTGRES_DB=demand_forecast_test postgres:16
+~~~
+
+Before continuing, run this readiness check until it reports that the server is accepting connections:
+
+~~~powershell
+docker exec forecast-integration-tests pg_isready -U forecast_test -d demand_forecast_test
+~~~
+
+Set all five connection variables explicitly. The test guard rejects missing settings and database names that do not end in `_test`.
+
+~~~powershell
+$env:POSTGRES_HOST = "127.0.0.1"
+$env:POSTGRES_PORT = "55433"
+$env:POSTGRES_USER = "forecast_test"
+$env:POSTGRES_PASSWORD = "forecast_test_local"
+$env:POSTGRES_DB = "demand_forecast_test"
+try {
+    @'
+from pathlib import Path
+from src.db import get_connection
+with get_connection() as conn:
+    conn.execute(Path("sql/init.sql").read_text())
+'@ | ./.venv/Scripts/python.exe -
+    if ($LASTEXITCODE -ne 0) { throw "Test database initialization failed." }
+
+    ./.venv/Scripts/python.exe -m pytest tests/ &&
+    ./.venv/Scripts/python.exe -m ruff check src/ tests/
+} finally {
+    Remove-Item Env:POSTGRES_HOST, Env:POSTGRES_PORT, Env:POSTGRES_USER, Env:POSTGRES_PASSWORD, Env:POSTGRES_DB -ErrorAction SilentlyContinue
+    docker stop forecast-integration-tests
+}
+~~~
+
+The final block clears the current shell's test overrides and removes the disposable container when it stops. If you previously used environment variables for another connection, set those intended values again before using it. The full-workbook database is excluded by the test naming guard.
+
+CI configures its own PostgreSQL 16 service and runs lint plus all unit and integration tests. The [verification record](docs/VERIFICATION.md) distinguishes local results from observed hosted runs.
 
 ## Documentation
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — system design and layer definitions
-- [ROADMAP.md](ROADMAP.md) — phased delivery plan
-- [docs/data_quality_contracts.md](docs/data_quality_contracts.md) — data quality approach
-- [docs/feature_registry.md](docs/feature_registry.md) — feature registry approach
-
-## Roadmap
-
-See [ROADMAP.md](ROADMAP.md) for the full plan. Current progress:
-
-- [x] Phase 1: Scaffold
-- [x] Phase 2: Raw ingestion
-- [x] Phase 3: Staging
-- [x] Phase 4: Marts
-- [x] Phase 5: Data quality contracts
-- [x] Phase 6: Feature registry and feature tables
-- [x] Phase 7: Baseline model
-- [x] Phase 8: Polish
+- [Architecture](ARCHITECTURE.md): table grains, refresh boundaries and prediction timing.
+- [Data source](DATA_SOURCE.md): attribution, checksum, reconciliation and analytical limits.
+- [Data quality contracts](docs/data_quality_contracts.md): implemented checks and negative test cases.
+- [Feature registry](docs/feature_registry.md): fields, definitions and permitted model inputs.
+- [Walkthrough](docs/WALKTHROUGH.md): sample demonstration and interview explanations.
+- [Verification](docs/VERIFICATION.md): checked revisions, environments and repeatability evidence.
+- [Roadmap](ROADMAP.md): implemented work and evidence needed for further development.

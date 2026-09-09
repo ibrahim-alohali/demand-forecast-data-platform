@@ -1,6 +1,6 @@
 """Build feature tables from marts.
 
-Full refresh: truncates features and re-inserts derived data.
+Full refresh: replaces the derived schema and data atomically.
 
 Usage:
     python -m src.features.build_features
@@ -46,12 +46,10 @@ def build_features(config: DBConfig | None = None) -> int:
             )
             sys.exit(1)
 
-        # Create table
+        # Recreate only this derived table to migrate earlier feature schemas.
+        # PostgreSQL rolls DDL and insertion back together if either fails.
+        conn.execute("DROP TABLE IF EXISTS features.product_daily_features")
         conn.execute(SQL_FILES["ddl"].read_text())
-        conn.commit()
-
-        # Truncate for full refresh
-        conn.execute("TRUNCATE features.product_daily_features")
 
         # Insert features
         conn.execute(SQL_FILES["insert"].read_text())

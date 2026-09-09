@@ -12,8 +12,12 @@ DDL_FILE = SQL_DIR / "features_product_daily.sql"
 INSERT_FILE = SQL_DIR / "features_product_daily_insert.sql"
 
 REQUIRED_FIELDS = {
-    "name", "description", "source_table",
-    "grain", "transform", "leakage_risk",
+    "name",
+    "description",
+    "source_table",
+    "grain",
+    "transform",
+    "leakage_risk",
 }
 
 
@@ -67,7 +71,10 @@ def test_registry_no_duplicate_names():
     assert len(names) == len(set(names)), f"Duplicate feature names: {names}"
 
 
-def test_registry_has_nine_features():
+def test_registry_forecast_inputs_match_model():
+    from src.model.train_baseline import FEATURE_COLUMNS
+
     with open(REGISTRY_PATH) as f:
         data = yaml.safe_load(f)
-    assert len(data["features"]) == 9
+    inputs = {f["name"] for f in data["features"] if f["model_input"]}
+    assert inputs == set(FEATURE_COLUMNS)

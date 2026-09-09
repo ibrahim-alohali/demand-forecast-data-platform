@@ -19,7 +19,7 @@ format:
 	ruff format src/ tests/
 
 db-init:
-	docker compose exec db psql -U $${POSTGRES_USER:-forecast} -d $${POSTGRES_DB:-demand_forecast} -f /docker-entrypoint-initdb.d/init.sql
+	docker compose exec -T db sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -f /docker-entrypoint-initdb.d/init.sql'
 
 download:
 	python -m src.ingestion.download

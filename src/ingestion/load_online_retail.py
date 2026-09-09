@@ -12,7 +12,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import io
 import sys
 from pathlib import Path
 
@@ -66,7 +65,7 @@ def _create_table(conn) -> None:
 
 
 def _read_source(file_path: Path) -> list[pd.DataFrame]:
-    """Read source file and return list of (dataframe, sheet_name) pairs.
+    """Read all source sheets, validate columns, and attach provenance.
 
     For xlsx: reads all sheets and tags each with its sheet name.
     For csv: reads as a single dataframe tagged with 'csv'.
@@ -74,41 +73,61 @@ def _read_source(file_path: Path) -> list[pd.DataFrame]:
     suffix = file_path.suffix.lower()
     filename = file_path.name
 
-    if suffix == ".xlsx":
-        sheets = pd.read_excel(file_path, sheet_name=None, dtype=str)
-        result = []
-        for sheet_name, df in sheets.items():
-            df = df.rename(columns=COLUMN_MAP)
-            df["source_file"] = filename
-            df["source_sheet"] = sheet_name
-            result.append(df)
-        return result
-    elif suffix == ".csv":
-        df = pd.read_csv(file_path, dtype=str)
-        # CSV columns may already be snake_case (sample file) or source-case
-        if "Invoice" in df.columns:
-            df = df.rename(columns=COLUMN_MAP)
-        df["source_file"] = filename
-        df["source_sheet"] = "csv"
-        return [df]
-    else:
+    if suffix not in {".xlsx", ".csv"}:
         raise ValueError(f"Unsupported file format: {suffix}")
+    # Only empty fields mean NULL. Labels such as 'NA' and '\\N' stay literal.
+    read_options = {"dtype": str, "keep_default_na": False, "na_values": [""]}
+    try:
+        sheets = (
+            pd.read_excel(file_path, sheet_name=None, **read_options)
+            if suffix == ".xlsx"
+            else {"csv": pd.read_csv(file_path, **read_options)}
+        )
+    except pd.errors.EmptyDataError as exc:
+        raise ValueError("Source file is empty") from exc
+    result = []
+    for sheet_name, df in sheets.items():
+        df = df.rename(columns=COLUMN_MAP)
+        if df.columns.duplicated().any():
+            raise ValueError(f"Duplicate source columns in sheet {sheet_name!r}")
+        missing = set(COLUMN_MAP.values()) - set(df.columns)
+        if missing:
+            raise ValueError(
+                f"Missing columns in sheet {sheet_name!r}: {sorted(missing)}"
+            )
+        unexpected = set(df.columns) - set(COLUMN_MAP.values())
+        if unexpected:
+            raise ValueError(
+                f"Unexpected columns in sheet {sheet_name!r}: {sorted(unexpected)}"
+            )
+        if df.empty:
+            raise ValueError(f"Source sheet {sheet_name!r} is empty")
+        prices = pd.to_numeric(df["price"], errors="coerce")
+        invalid_prices = df["price"].notna() & (
+            prices.isna() | prices.isin([float("inf"), float("-inf")])
+        )
+        if invalid_prices.any():
+            raise ValueError(
+                f"Invalid/non-finite prices in sheet {sheet_name!r}: "
+                f"{int(invalid_prices.sum())} rows"
+            )
+        df["source_file"] = filename
+        df["source_sheet"] = sheet_name
+        result.append(df)
+    if not result:
+        raise ValueError("Source contains no data sheets")
+    return result
 
 
 def _bulk_insert(conn, df: pd.DataFrame) -> int:
     """Insert a dataframe into raw.online_retail using COPY protocol."""
-    # Build a CSV-like text buffer for COPY
-    buffer = io.StringIO()
-    df[RAW_COLUMNS].to_csv(buffer, index=False, header=False, sep="\t", na_rep="\\N")
-    buffer.seek(0)
-
     copy_sql = (
         f"COPY raw.online_retail ({', '.join(RAW_COLUMNS)}) "
-        f"FROM STDIN WITH (FORMAT text)"
+        "FROM STDIN"
     )
     with conn.cursor().copy(copy_sql) as copy:
-        while data := buffer.read(8192):
-            copy.write(data)
+        for row in df[RAW_COLUMNS].itertuples(index=False, name=None):
+            copy.write_row(tuple(None if pd.isna(value) else value for value in row))
 
     return len(df)
 
@@ -134,11 +153,14 @@ def load_online_retail(
     Raises:
         RuntimeError: If mode is 'safe' and the table already has rows.
     """
+    if mode not in {"safe", "replace", "append"}:
+        raise ValueError(f"Unsupported load mode: {mode!r}")
+    dataframes = _read_source(Path(file_path))
     conn = get_connection(config)
     try:
         _create_table(conn)
-        conn.commit()
-
+        # Serialize competing loads so 'safe' cannot race another writer.
+        conn.execute("LOCK TABLE raw.online_retail IN EXCLUSIVE MODE")
         existing_rows = _get_row_count(conn)
 
         if mode == "safe" and existing_rows > 0:
@@ -151,7 +173,6 @@ def load_online_retail(
             conn.execute("TRUNCATE raw.online_retail")
             print(f"Truncated raw.online_retail ({existing_rows:,} rows removed)")
 
-        dataframes = _read_source(file_path)
         total_rows = 0
         for df in dataframes:
             sheet = df["source_sheet"].iloc[0]

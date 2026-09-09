@@ -9,6 +9,24 @@ on:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: forecast_test
+          POSTGRES_PASSWORD: forecast_ci_only
+          POSTGRES_DB: forecast_ci_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U forecast_test -d forecast_ci_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: forecast_test
+      POSTGRES_PASSWORD: forecast_ci_only
+      POSTGRES_DB: forecast_ci_test
 
     steps:
       - uses: actions/checkout@v4
@@ -24,5 +42,14 @@ jobs:
       - name: Lint
         run: ruff check src/ tests/
 
-      - name: Test
-        run: python -m pytest tests/ -m "not integration"
+      - name: Initialize isolated database schemas
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from src.db import get_connection
+          with get_connection() as conn:
+              conn.execute(Path("sql/init.sql").read_text())
+          PY
+
+      - name: Unit and PostgreSQL integration tests
+        run: python -m pytest tests/

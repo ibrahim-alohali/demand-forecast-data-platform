@@ -1,16 +1,13 @@
-"""Train a baseline linear regression on the feature table.
+"""Evaluate one-calendar-day-ahead recorded paid gross sales forecasts.
 
-Reads from features.product_daily_features, trains a LinearRegression,
-evaluates on a held-out set, and saves results to data/.
-
-Usage:
-    python -m src.model.train_baseline
+Usage: python -m src.model.train_baseline --output-dir data/sample
 """
 
 from __future__ import annotations
 
+import argparse
+import hashlib
 import json
-import sys
 from datetime import date
 from pathlib import Path
 
@@ -23,230 +20,321 @@ from src.db import get_connection
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
-
 TARGET = "total_quantity"
-
 FEATURE_COLUMNS = [
-    "total_revenue",
-    "return_quantity",
-    "transaction_count",
-    "avg_unit_price",
+    "lag_1d_quantity",
+    "lag_7d_quantity",
     "rolling_7d_quantity",
-    "rolling_7d_revenue",
-    "days_since_first_seen",
-    "distinct_countries",
+    "weekday",
 ]
+KEY_COLUMNS = ["stock_code", "country", "sale_date"]
 
 
 def _load_features() -> pd.DataFrame:
-    """Read all rows from the feature table into a DataFrame."""
-    conn = get_connection()
-    try:
-        rows = conn.execute(
-            "SELECT * FROM features.product_daily_features"
-        ).fetchall()
-        columns = [
-            desc.name
-            for desc in conn.execute(
-                "SELECT * FROM features.product_daily_features LIMIT 0"
-            ).description
+    """Stream only model columns; categorical keys limit full-workbook memory use."""
+    columns = KEY_COLUMNS + [TARGET] + FEATURE_COLUMNS
+    chunks = []
+    with get_connection() as conn:
+        stocks = [
+            r[0]
+            for r in conn.execute(
+                "SELECT stock_code FROM marts.dim_product ORDER BY stock_code"
+            )
         ]
-    finally:
-        conn.close()
-    return pd.DataFrame(rows, columns=columns)
+        countries = [
+            r[0]
+            for r in conn.execute(
+                "SELECT DISTINCT country FROM marts.fct_daily_product_sales "
+                "ORDER BY country"
+            )
+        ]
+        sources = conn.execute("""
+            SELECT source_file, source_sheet, COUNT(*) FROM raw.online_retail
+            GROUP BY source_file, source_sheet ORDER BY source_file, source_sheet
+        """).fetchall()
+        with conn.cursor(name="forecast_features") as cursor:
+            cursor.execute(
+                "SELECT " + ", ".join(columns) + " FROM features.product_daily_features"
+            )
+            while rows := cursor.fetchmany(100_000):
+                chunk = pd.DataFrame.from_records(rows, columns=columns)
+                chunk["stock_code"] = pd.Categorical(chunk["stock_code"], stocks)
+                chunk["country"] = pd.Categorical(chunk["country"], countries)
+                chunk["sale_date"] = pd.to_datetime(chunk["sale_date"])
+                chunk[FEATURE_COLUMNS] = chunk[FEATURE_COLUMNS].astype(float)
+                chunks.append(chunk)
+    df = (
+        pd.concat(chunks, ignore_index=True)
+        if chunks
+        else pd.DataFrame(columns=columns)
+    )
+    df.attrs["source"] = {
+        "raw_rows": sum(row[2] for row in sources),
+        "files": [{"file": f, "sheet": s, "rows": n} for f, s, n in sources],
+    }
+    return df
 
 
 def _json_serializable(obj: object) -> object:
-    """Convert numpy/date types for JSON serialization."""
-    if isinstance(obj, (np.integer,)):
+    if isinstance(obj, np.integer):
         return int(obj)
-    if isinstance(obj, (np.floating,)):
+    if isinstance(obj, np.floating):
         return float(obj)
     if isinstance(obj, date):
         return obj.isoformat()
-    return obj
+    raise TypeError(f"Cannot serialize {type(obj).__name__}")
 
 
-def train_baseline() -> dict:
-    """Train baseline model and return evaluation metrics.
+def _date(value) -> str | None:
+    return None if pd.isna(value) else pd.Timestamp(value).date().isoformat()
 
-    Returns:
-        Dictionary with evaluation results.
-    """
-    df = _load_features()
 
-    if len(df) == 0:
-        print("Error: feature table is empty. Run the pipeline first.")
-        sys.exit(1)
-
-    distinct_dates = df["sale_date"].nunique()
-    warnings: list[str] = []
-
-    if distinct_dates < 7:
-        msg = (
-            f"Warning: only {distinct_dates} distinct sale date(s). "
-            "Results are not meaningful due to limited temporal data."
-        )
-        print(msg)
-        warnings.append(msg)
-
-    # Fill nulls in avg_unit_price (NULL when total_quantity is 0)
-    df["avg_unit_price"] = df["avg_unit_price"].fillna(0)
-
-    X = df[FEATURE_COLUMNS]
-    y = df[TARGET]
-
-    # Train/test split
-    if distinct_dates > 1:
-        sorted_dates = sorted(df["sale_date"].unique())
-        split_idx = max(1, int(len(sorted_dates) * 0.8))
-        cutoff_date = sorted_dates[split_idx]
-        train_mask = df["sale_date"] < cutoff_date
-        test_mask = df["sale_date"] >= cutoff_date
-        split_method = "time-based"
-    else:
-        rng = np.random.default_rng(42)
-        n = len(df)
-        indices = rng.permutation(n)
-        split_point = int(n * 0.8)
-        train_mask = pd.Series(False, index=df.index)
-        test_mask = pd.Series(False, index=df.index)
-        train_mask.iloc[indices[:split_point]] = True
-        test_mask.iloc[indices[split_point:]] = True
-        split_method = "random"
-        warnings.append(
-            "Single sale date: used random split instead of time-based."
-        )
-
-    X_train, X_test = X[train_mask], X[test_mask]
-    y_train, y_test = y[train_mask], y[test_mask]
-
-    model = LinearRegression()
-    model.fit(X_train, y_train)
-
-    y_pred = model.predict(X_test)
-
-    mae = mean_absolute_error(y_test, y_pred)
-    rmse = float(np.sqrt(mean_squared_error(y_test, y_pred)))
-    r2 = r2_score(y_test, y_pred)
-
-    date_range_start = df["sale_date"].min()
-    date_range_end = df["sale_date"].max()
-
-    evaluation = {
-        "mae": round(mae, 4),
-        "rmse": round(rmse, 4),
-        "r2": round(r2, 4),
-        "n_train": int(len(X_train)),
-        "n_test": int(len(X_test)),
-        "n_features": len(FEATURE_COLUMNS),
-        "feature_columns": FEATURE_COLUMNS,
-        "split_method": split_method,
-        "date_range_start": date_range_start,
-        "date_range_end": date_range_end,
-        "distinct_dates": int(distinct_dates),
-        "warning": warnings if warnings else None,
+def _metrics(actual, prediction) -> dict:
+    """R-squared is undefined for fewer than two or constant observed targets."""
+    r2 = None
+    if len(actual) >= 2 and np.ptp(np.asarray(actual)) > 0:
+        score = float(r2_score(actual, prediction, force_finite=False))
+        r2 = round(score, 4) if np.isfinite(score) else None
+    return {
+        "mae": round(float(mean_absolute_error(actual, prediction)), 4),
+        "rmse": round(float(np.sqrt(mean_squared_error(actual, prediction))), 4),
+        "r2": r2,
+        "n_test": int(len(actual)),
     }
 
-    # Save evaluation JSON
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    eval_path = DATA_DIR / "model_evaluation.json"
-    with open(eval_path, "w") as f:
-        json.dump(evaluation, f, indent=2, default=_json_serializable)
-    print(f"Saved evaluation to {eval_path.relative_to(PROJECT_ROOT)}")
 
-    # Generate report
-    report = _generate_report(df, evaluation)
-    report_path = DATA_DIR / "model_report.md"
-    with open(report_path, "w") as f:
-        f.write(report)
-    print(f"Saved report to {report_path.relative_to(PROJECT_ROOT)}")
+def _evaluate(df: pd.DataFrame) -> dict:
+    required = KEY_COLUMNS + [TARGET] + FEATURE_COLUMNS
+    missing = sorted(set(required) - set(df.columns))
+    if missing:
+        raise ValueError(
+            f"Missing feature columns: {', '.join(missing)}; rebuild features."
+        )
+    if df[KEY_COLUMNS + [TARGET, "weekday"]].isna().any().any():
+        raise ValueError("Feature keys, weekday and target must not be null.")
+    if df.duplicated(KEY_COLUMNS).any():
+        raise ValueError("Duplicate product-country-date rows in feature table.")
+    numeric = df[[TARGET] + FEATURE_COLUMNS].astype(float)
+    if np.isinf(numeric.to_numpy()).any() or (numeric[TARGET] < 0).any():
+        raise ValueError("Forecast values must be finite and target nonnegative.")
 
-    # Print summary
-    print()
-    print("Model:          LinearRegression")
-    print(f"Target:         {TARGET}")
-    print(f"Features:       {len(FEATURE_COLUMNS)}")
-    print(f"Train rows:     {len(X_train)}")
-    print(f"Test rows:      {len(X_test)}")
-    print(f"Split method:   {split_method}")
-    print(f"MAE:            {mae:.4f}")
-    print(f"RMSE:           {rmse:.4f}")
-    print(f"R-squared:      {r2:.4f}")
+    eligible_mask = df[FEATURE_COLUMNS].notna().all(axis=1)
+    eligible = df.loc[eligible_mask].sort_values(["sale_date", "stock_code", "country"])
+    dates = sorted(eligible["sale_date"].unique())
+    empty_metrics = {"mae": None, "rmse": None, "r2": None, "n_test": 0}
+    evaluation = {
+        **empty_metrics,
+        "schema_version": 2,
+        "status": "not_evaluable",
+        "reason": None,
+        "target": "next-day recorded paid gross sales quantity",
+        "forecast_horizon_days": 1,
+        "n_train": 0,
+        "n_features": len(FEATURE_COLUMNS),
+        "feature_columns": FEATURE_COLUMNS,
+        "split_method": "time-based",
+        "cutoff_date": None,
+        "train_date_start": None,
+        "train_date_end": None,
+        "test_date_start": None,
+        "test_date_end": None,
+        "date_range_start": _date(df["sale_date"].min()),
+        "date_range_end": _date(df["sale_date"].max()),
+        "distinct_dates": int(df["sale_date"].nunique()),
+        "coverage": {
+            "total_rows": len(df),
+            "eligible_rows": len(eligible),
+            "excluded_history_rows": int((~eligible_mask).sum()),
+            "eligible_dates": len(dates),
+            "series": len(df[["stock_code", "country"]].drop_duplicates()),
+            "excluded_history_rows_in_test_period": None,
+            "test_series_absent_from_training": None,
+        },
+        "baselines": {
+            "previous_day": dict(empty_metrics),
+            "previous_weekday": dict(empty_metrics),
+        },
+        "source": df.attrs.get("source"),
+        "prediction_floor": 0,
+        "error_examples": [],
+        "warning": None,
+    }
+    if len(dates) < 2:
+        evaluation["reason"] = (
+            "Need at least two eligible target dates after seven full calendar days "
+            "of series history. Empty, single-day and short-history samples cannot "
+            "support forecasting evaluation."
+        )
+        return evaluation
 
+    cutoff = dates[max(1, int(len(dates) * 0.8))]
+    train = eligible.loc[eligible["sale_date"] < cutoff]
+    test = eligible.loc[eligible["sale_date"] >= cutoff]
+    model = LinearRegression()
+    model.fit(train[FEATURE_COLUMNS], train[TARGET])
+    prediction = np.maximum(model.predict(test[FEATURE_COLUMNS]), 0)
+    actual = test[TARGET].to_numpy()
+    evaluation.update(_metrics(actual, prediction))
+    evaluation.update(
+        {
+            "status": "evaluated",
+            "n_train": len(train),
+            "cutoff_date": _date(cutoff),
+            "train_date_start": _date(train["sale_date"].min()),
+            "train_date_end": _date(train["sale_date"].max()),
+            "test_date_start": _date(test["sale_date"].min()),
+            "test_date_end": _date(test["sale_date"].max()),
+            "baselines": {
+                "previous_day": _metrics(actual, test["lag_1d_quantity"].to_numpy()),
+                "previous_weekday": _metrics(
+                    actual, test["lag_7d_quantity"].to_numpy()
+                ),
+            },
+            "coefficients": dict(
+                zip(FEATURE_COLUMNS, model.coef_.tolist(), strict=True)
+            ),
+            "intercept": float(model.intercept_),
+        }
+    )
+    train_series = pd.MultiIndex.from_frame(train[["stock_code", "country"]])
+    test_series = pd.MultiIndex.from_frame(test[["stock_code", "country"]])
+    evaluation["coverage"].update(
+        {
+            "excluded_history_rows_in_test_period": int(
+                ((~eligible_mask) & (df["sale_date"] >= cutoff)).sum()
+            ),
+            "test_series_absent_from_training": len(
+                test_series.unique().difference(train_series.unique())
+            ),
+        }
+    )
+    errors = np.abs(actual - prediction)
+    examples = [
+        ("smallest absolute error", int(np.argmin(errors))),
+        (
+            "nearest median absolute error",
+            int(np.argmin(np.abs(errors - np.median(errors)))),
+        ),
+        ("largest absolute error", int(np.argmax(errors))),
+    ]
+    for label, position in examples:
+        row = test.iloc[position]
+        evaluation["error_examples"].append(
+            {
+                "selection": label,
+                "stock_code": row["stock_code"],
+                "country": row["country"],
+                "sale_date": _date(row["sale_date"]),
+                "actual": float(actual[position]),
+                "prediction": float(prediction[position]),
+                "absolute_error": float(errors[position]),
+                "previous_day": float(row["lag_1d_quantity"]),
+                "previous_weekday": float(row["lag_7d_quantity"]),
+            }
+        )
     return evaluation
 
 
 def _generate_report(df: pd.DataFrame, evaluation: dict) -> str:
-    """Generate a markdown report summarizing the baseline model."""
+    e = evaluation
     lines = [
-        "# Baseline Model Report",
+        "# One-day forecasting evaluation",
         "",
-        "## Model",
+        f"Status: **{e['status']}**. {e['reason'] or ''}".rstrip(),
         "",
-        "- Type: LinearRegression (scikit-learn)",
-        f"- Target variable: {TARGET}",
+        "Target: next calendar day's recorded paid gross sales quantity per "
+        "product and country. Returns are reported separately; this is not net sales.",
         "",
-        "## Features",
+        "## Method",
         "",
-    ]
-    for feat in FEATURE_COLUMNS:
-        lines.append(f"- {feat}")
-
-    lines += [
+        "- LinearRegression with a nonnegative prediction floor of zero.",
+        f"- Inputs: {', '.join(FEATURE_COLUMNS)}.",
+        "- Every predictor for date t uses information available through t−1, "
+        "plus the known weekday of t.",
+        "- Earliest 80% of eligible dates train the model; latest 20% evaluate it. "
+        "The fitted model stays fixed; prior observed evaluation days update lags.",
+        f"- Train: {e['train_date_start']} to {e['train_date_end']} "
+        f"({e['n_train']:,} rows).",
+        f"- Test: {e['test_date_start']} to {e['test_date_end']} "
+        f"({e['n_test']:,} rows).",
         "",
-        "## Data",
+        "## Coverage",
         "",
-        f"- Total rows: {len(df)}",
-        f"- Date range: {evaluation['date_range_start']} to "
-        f"{evaluation['date_range_end']}",
-        f"- Distinct dates: {evaluation['distinct_dates']}",
-        f"- Distinct products: {df['stock_code'].nunique()}",
-        f"- Distinct countries: {df['country'].nunique()}",
-        "",
-        "## Train/test split",
-        "",
-        f"- Method: {evaluation['split_method']}",
-        f"- Train rows: {evaluation['n_train']}",
-        f"- Test rows: {evaluation['n_test']}",
+        f"- Calendar rows: {len(df):,}; eligible: {e['coverage']['eligible_rows']:,}.",
+        f"- Excluded for missing seven-day history: "
+        f"{e['coverage']['excluded_history_rows']:,}.",
+        f"- Eligible target dates: {e['coverage']['eligible_dates']}.",
         "",
         "## Metrics",
         "",
-        "| Metric | Value |",
-        "|--------|-------|",
-        f"| MAE | {evaluation['mae']} |",
-        f"| RMSE | {evaluation['rmse']} |",
-        f"| R-squared | {evaluation['r2']} |",
+        "All methods use the same evaluation observations. null means undefined "
+        "or not evaluable. MAE and RMSE are in units per product-country-day.",
+        "",
+        "| Method | MAE | RMSE | R-squared | Evaluation rows |",
+        "|---|---:|---:|---:|---:|",
+    ]
+    for name, result in [("LinearRegression", e), *e["baselines"].items()]:
+        values = [
+            "null" if result[k] is None else str(result[k])
+            for k in ("mae", "rmse", "r2", "n_test")
+        ]
+        lines.append(f"| {name} | " + " | ".join(values) + " |")
+    lines += [
         "",
         "## Limitations",
         "",
+        "- Missing transaction days are zero recorded sales, not proof of zero "
+        "demand. Inventory availability and stockouts are unknown.",
+        "- Series begin at first recorded eligible sale/return and continue to "
+        "the shared dataset end. New series need seven days of observations.",
+        "- Pooled linear baseline, fixed split, no tuning or external validation. "
+        "Global metrics can obscure differences between products and countries.",
+        "- R-squared is null for fewer than two observations or constant targets.",
+        "- Source files/sheets, coverage, coefficients and explicitly selected "
+        "error examples are available in the companion evaluation JSON.",
+        "",
     ]
-
-    limitations = [
-        "- Baseline linear model with no hyperparameter tuning.",
-        "- Feature set is minimal (8 features).",
-        "- Model exists to validate the pipeline, not for production forecasting.",
-    ]
-
-    if evaluation["distinct_dates"] < 7:
-        limitations.insert(
-            1,
-            "- Limited temporal data: temporal patterns are not captured.",
-        )
-
-    if evaluation["split_method"] == "random":
-        limitations.insert(
-            1,
-            "- Single-day data: time-based split was not possible.",
-        )
-
-    lines += limitations
-    lines.append("")
     return "\n".join(lines)
 
 
+def train_baseline(
+    output_dir: Path | str | None = None, source_identity: dict | None = None
+) -> dict:
+    """Evaluate and write reports; insufficient history is an explicit result."""
+    df = _load_features()
+    evaluation = _evaluate(df)
+    if source_identity is not None:
+        evaluation["source"] = {**(evaluation["source"] or {}), **source_identity}
+    destination = Path(output_dir) if output_dir is not None else DATA_DIR
+    destination.mkdir(parents=True, exist_ok=True)
+    (destination / "model_evaluation.json").write_text(
+        json.dumps(evaluation, indent=2, default=_json_serializable, allow_nan=False)
+        + "\n",
+        encoding="utf-8",
+    )
+    (destination / "model_report.md").write_text(
+        _generate_report(df, evaluation),
+        encoding="utf-8",
+    )
+    print(f"Forecast evaluation: {evaluation['status']}; reports: {destination}")
+    return evaluation
+
+
 def main() -> None:
-    train_baseline()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output-dir", type=Path, default=DATA_DIR)
+    parser.add_argument(
+        "--source-file",
+        type=Path,
+        help="Attach this local input file's name and SHA-256 to results",
+    )
+    args = parser.parse_args()
+    identity = None
+    if args.source_file is not None:
+        with args.source_file.open("rb") as source:
+            digest = hashlib.file_digest(source, "sha256").hexdigest()
+        identity = {"input_file": args.source_file.name, "sha256": digest}
+    train_baseline(args.output_dir, source_identity=identity)
 
 
 if __name__ == "__main__":

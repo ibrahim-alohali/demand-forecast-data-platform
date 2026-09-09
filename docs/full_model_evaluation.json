@@ -1,0 +1,112 @@
+{
+  "mae": 1.3264,
+  "rmse": 11.144,
+  "r2": 0.0609,
+  "n_test": 3754801,
+  "schema_version": 2,
+  "status": "evaluated",
+  "reason": null,
+  "target": "next-day recorded paid gross sales quantity",
+  "forecast_horizon_days": 1,
+  "n_train": 8333271,
+  "n_features": 4,
+  "feature_columns": [
+    "lag_1d_quantity",
+    "lag_7d_quantity",
+    "rolling_7d_quantity",
+    "weekday"
+  ],
+  "split_method": "time-based",
+  "cutoff_date": "2011-07-16",
+  "train_date_start": "2009-12-08",
+  "train_date_end": "2011-07-15",
+  "test_date_start": "2011-07-16",
+  "test_date_end": "2011-12-09",
+  "date_range_start": "2009-12-01",
+  "date_range_end": "2011-12-09",
+  "distinct_dates": 739,
+  "coverage": {
+    "total_rows": 12286085,
+    "eligible_rows": 12088072,
+    "excluded_history_rows": 198013,
+    "eligible_dates": 732,
+    "series": 28353,
+    "excluded_history_rows_in_test_period": 35930,
+    "test_series_absent_from_training": 5195
+  },
+  "baselines": {
+    "previous_day": {
+      "mae": 1.0718,
+      "rmse": 14.9024,
+      "r2": -0.6794,
+      "n_test": 3754801
+    },
+    "previous_weekday": {
+      "mae": 1.0182,
+      "rmse": 14.3743,
+      "r2": -0.5625,
+      "n_test": 3754801
+    }
+  },
+  "source": {
+    "raw_rows": 1067371,
+    "files": [
+      {
+        "file": "online_retail_II.xlsx",
+        "sheet": "Year 2009-2010",
+        "rows": 525461
+      },
+      {
+        "file": "online_retail_II.xlsx",
+        "sheet": "Year 2010-2011",
+        "rows": 541910
+      }
+    ],
+    "input_file": "online_retail_II.xlsx",
+    "sha256": "bcbe73b35f5b7babf197fb0cb983a11f5d9ff929078d4aa53d171b1f2df2e980"
+  },
+  "prediction_floor": 0,
+  "error_examples": [
+    {
+      "selection": "smallest absolute error",
+      "stock_code": "85066",
+      "country": "United Kingdom",
+      "sale_date": "2011-10-31",
+      "actual": 2.0,
+      "prediction": 2.000021677955944,
+      "absolute_error": 2.167795594409938e-05,
+      "previous_day": 4.0,
+      "previous_weekday": 1.0
+    },
+    {
+      "selection": "nearest median absolute error",
+      "stock_code": "10002",
+      "country": "Australia",
+      "sale_date": "2011-07-21",
+      "actual": 0.0,
+      "prediction": 0.6369200878602068,
+      "absolute_error": 0.6369200878602068,
+      "previous_day": 0.0,
+      "previous_weekday": 0.0
+    },
+    {
+      "selection": "largest absolute error",
+      "stock_code": "84077",
+      "country": "United Kingdom",
+      "sale_date": "2011-10-27",
+      "actual": 4848.0,
+      "prediction": 42.09476347786132,
+      "absolute_error": 4805.905236522139,
+      "previous_day": 144.0,
+      "previous_weekday": 192.0
+    }
+  ],
+  "warning": null,
+  "coefficients": {
+    "lag_1d_quantity": 0.008434761646773571,
+    "lag_7d_quantity": -0.025220563009419023,
+    "rolling_7d_quantity": 0.2858687506111587,
+    "weekday": -0.15204615391337833
+  },
+  "intercept": 1.0930585496003418
+}

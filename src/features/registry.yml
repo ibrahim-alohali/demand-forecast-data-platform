@@ -1,72 +1,108 @@
 features:
   - name: total_quantity
-    description: "Total units sold for this product-day-country"
+    description: "Target-day recorded paid gross units; zero on missing transaction days"
     source_table: marts.fct_daily_product_sales
     grain: stock_code, sale_date, country
-    transform: "passthrough"
-    leakage_risk: none
-    downstream_use: baseline demand forecast
+    transform: "COALESCE(total_quantity, 0) on a dense daily calendar"
+    leakage_risk: "target, never a predictor"
+    model_input: false
+    downstream_use: forecast target
+
+  - name: lag_1d_quantity
+    description: "Recorded paid gross quantity on target date minus one calendar day"
+    source_table: marts.fct_daily_product_sales
+    grain: stock_code, sale_date, country
+    transform: "LAG(total_quantity, 1) within dense product-country calendar"
+    leakage_risk: "none when prior-day observations are available"
+    model_input: true
+    downstream_use: forecast input and previous-day comparator
+
+  - name: lag_7d_quantity
+    description: "Recorded paid gross quantity seven calendar days before target date"
+    source_table: marts.fct_daily_product_sales
+    grain: stock_code, sale_date, country
+    transform: "LAG(total_quantity, 7) within dense product-country calendar"
+    leakage_risk: "none when prior observations are available"
+    model_input: true
+    downstream_use: forecast input and previous-weekday comparator
+
+  - name: rolling_7d_quantity
+    description: "Mean recorded paid gross quantity over the seven days preceding target date"
+    source_table: marts.fct_daily_product_sales
+    grain: stock_code, sale_date, country
+    transform: "AVG over ROWS BETWEEN 7 PRECEDING AND 1 PRECEDING; NULL until seven days exist"
+    leakage_risk: "none; excludes target day and later observations"
+    model_input: true
+    downstream_use: forecast input
+
+  - name: weekday
+    description: "Known target-date weekday: Monday=0, Sunday=6"
+    source_table: marts.fct_daily_product_sales
+    grain: stock_code, sale_date, country
+    transform: "EXTRACT(ISODOW FROM sale_date) - 1"
+    leakage_risk: "none; calendar is known in advance"
+    model_input: true
+    downstream_use: forecast input
 
   - name: total_revenue
-    description: "Total revenue for this product-day-country"
+    description: "Target-day recorded paid gross sales amount"
     source_table: marts.fct_daily_product_sales
     grain: stock_code, sale_date, country
-    transform: "passthrough"
-    leakage_risk: none
-    downstream_use: baseline demand forecast
+    transform: "COALESCE(total_revenue, 0) on dense calendar"
+    leakage_risk: "high for forecasting; unavailable before target day"
+    model_input: false
+    downstream_use: historical analysis only
 
   - name: return_quantity
-    description: "Total units returned for this product-day-country"
+    description: "Target-day absolute units on eligible negative-quantity cancellation lines"
     source_table: marts.fct_daily_product_sales
     grain: stock_code, sale_date, country
-    transform: "passthrough"
-    leakage_risk: none
-    downstream_use: return rate analysis
+    transform: "COALESCE(return_quantity, 0) on dense calendar"
+    leakage_risk: "high for forecasting; unavailable before target day"
+    model_input: false
+    downstream_use: historical returns analysis only
 
   - name: transaction_count
-    description: "Number of distinct invoices for this product-day-country"
+    description: "Distinct eligible paid sales invoices for target product-date-country"
     source_table: marts.fct_daily_product_sales
     grain: stock_code, sale_date, country
-    transform: "passthrough"
-    leakage_risk: none
-    downstream_use: demand frequency signal
+    transform: "COALESCE(transaction_count, 0) on dense calendar"
+    leakage_risk: "high for forecasting; unavailable before target day"
+    model_input: false
+    downstream_use: historical sales frequency only
 
   - name: avg_unit_price
-    description: "Revenue per unit sold (NULL when quantity is 0)"
+    description: "Target-day gross revenue per unit; NULL when gross quantity is zero"
     source_table: marts.fct_daily_product_sales
     grain: stock_code, sale_date, country
     transform: "total_revenue / NULLIF(total_quantity, 0)"
-    leakage_risk: none
-    downstream_use: price sensitivity features
-
-  - name: rolling_7d_quantity
-    description: "7-day rolling average of daily quantity sold"
-    source_table: marts.fct_daily_product_sales
-    grain: stock_code, sale_date, country
-    transform: "AVG(total_quantity) OVER (PARTITION BY stock_code, country ORDER BY sale_date ROWS 6 PRECEDING)"
-    leakage_risk: none
-    downstream_use: demand trend signal
+    leakage_risk: "high; derived from target-day quantity and revenue"
+    model_input: false
+    downstream_use: historical analysis only
 
   - name: rolling_7d_revenue
-    description: "7-day rolling average of daily revenue"
+    description: "Mean gross revenue on seven calendar days before target date"
     source_table: marts.fct_daily_product_sales
     grain: stock_code, sale_date, country
-    transform: "AVG(total_revenue) OVER (PARTITION BY stock_code, country ORDER BY sale_date ROWS 6 PRECEDING)"
-    leakage_risk: none
-    downstream_use: revenue trend signal
+    transform: "AVG over ROWS BETWEEN 7 PRECEDING AND 1 PRECEDING; NULL until seven days exist"
+    leakage_risk: "none when prior observations are available"
+    model_input: false
+    downstream_use: historical trend analysis; deliberately excluded from current model
 
   - name: days_since_first_seen
-    description: "Days between sale_date and the product's first appearance in the dataset"
+    description: "Days since the product's first eligible record across countries"
     source_table: marts.dim_product
     grain: stock_code, sale_date, country
     transform: "sale_date - dim_product.first_seen"
-    leakage_risk: none
-    downstream_use: product maturity signal
+    leakage_risk: "none for dates after first observation; descriptive only"
+    model_input: false
+    downstream_use: historical product context
 
   - name: distinct_countries
-    description: "Number of distinct countries the product has been sold in"
+    description: "Countries with eligible product records across the entire loaded period"
     source_table: marts.dim_product
     grain: stock_code, sale_date, country
     transform: "passthrough from dim_product"
-    leakage_risk: low
-    downstream_use: product reach indicator
+    leakage_risk: "high; includes countries first observed after target date"
+    model_input: false
+    downstream_use: whole-period descriptive analysis only

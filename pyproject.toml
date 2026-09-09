@@ -1,7 +1,7 @@
 [project]
 name = "demand-forecast-data-platform"
 version = "0.1.0"
-description = "A local-first data engineering platform for demand forecasting and inventory intelligence."
+description = "A local PostgreSQL pipeline for retail sales analysis and next-day recorded sales forecasting."
 requires-python = "==3.11.*"
 dependencies = [
     "psycopg[binary]",

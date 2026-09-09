@@ -59,13 +59,15 @@ def stg_not_null_core(conn: psycopg.Connection) -> ContractResult:
 def stg_positive_price(conn: psycopg.Connection) -> ContractResult:
     bad = _scalar(
         conn,
-        "SELECT COUNT(*) FROM staging.stg_online_retail WHERE price < 0",
+        "SELECT COUNT(*) FROM staging.stg_online_retail "
+        "WHERE price < 0 OR price = 'NaN'::numeric",
     )
     return ContractResult(
         table="staging.stg_online_retail",
         check_name="positive_price",
         passed=bad == 0,
-        message="all prices >= 0" if bad == 0 else f"{bad} rows with negative price",
+        message=("all prices finite and >= 0" if bad == 0
+                 else f"{bad} rows with negative or non-finite price"),
     )
 
 
@@ -160,14 +162,16 @@ def fct_non_negative_revenue(conn: psycopg.Connection) -> ContractResult:
     bad = _scalar(
         conn,
         "SELECT COUNT(*) FROM marts.fct_daily_product_sales "
-        "WHERE total_revenue < 0 OR return_revenue < 0",
+        "WHERE total_revenue < 0 OR return_revenue < 0 "
+        "OR total_revenue = 'NaN'::numeric OR return_revenue = 'NaN'::numeric",
     )
     return ContractResult(
         table="marts.fct_daily_product_sales",
         check_name="non_negative_revenue",
         passed=bad == 0,
         message=(
-            "all revenue >= 0" if bad == 0 else f"{bad} rows with negative revenue"
+            "all revenue finite and >= 0" if bad == 0
+            else f"{bad} rows with negative or non-finite revenue"
         ),
     )
 

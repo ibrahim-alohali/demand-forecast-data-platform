@@ -36,6 +36,8 @@ data/*.json
 data/*.md
 data/*.xlsx
 data/*.zip
+data/full/
+data/sample/
 !data/.gitkeep
 !data/sample_online_retail.csv
 

@@ -6,6 +6,7 @@ import os
 from dataclasses import dataclass
 
 from dotenv import load_dotenv
+from psycopg.conninfo import make_conninfo
 
 
 @dataclass(frozen=True)
@@ -21,17 +22,16 @@ class DBConfig:
     @property
     def conninfo(self) -> str:
         """Return a libpq-style connection string."""
-        return (
-            f"host={self.host} port={self.port} "
-            f"dbname={self.dbname} user={self.user} password={self.password}"
+        return make_conninfo(
+            host=self.host, port=self.port, dbname=self.dbname,
+            user=self.user, password=self.password,
         )
 
 
 def get_config() -> DBConfig:
     """Load database config from environment variables.
 
-    Reads from a .env file if present, then falls back to
-    actual environment variables.
+    Existing environment variables take precedence; a .env file fills gaps.
     """
     load_dotenv()
 

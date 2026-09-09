@@ -89,8 +89,7 @@ def test_grain_unique():
 def test_grain_columns_not_null():
     for col in ["stock_code", "sale_date", "country"]:
         nulls = _query(
-            f"SELECT COUNT(*) FROM features.product_daily_features "
-            f"WHERE {col} IS NULL"
+            f"SELECT COUNT(*) FROM features.product_daily_features WHERE {col} IS NULL"
         )[0][0]
         assert nulls == 0, f"{col} has {nulls} NULL values"
 
@@ -100,8 +99,7 @@ def test_grain_columns_not_null():
 
 def test_total_quantity_non_negative():
     bad = _query(
-        "SELECT COUNT(*) FROM features.product_daily_features "
-        "WHERE total_quantity < 0"
+        "SELECT COUNT(*) FROM features.product_daily_features WHERE total_quantity < 0"
     )[0][0]
     assert bad == 0, f"{bad} rows with negative total_quantity"
 
@@ -109,12 +107,12 @@ def test_total_quantity_non_negative():
 # --- rolling window not null ---
 
 
-def test_rolling_7d_quantity_not_null():
+def test_single_day_sample_has_no_prior_week():
     nulls = _query(
         "SELECT COUNT(*) FROM features.product_daily_features "
-        "WHERE rolling_7d_quantity IS NULL"
+        "WHERE rolling_7d_quantity IS NOT NULL"
     )[0][0]
-    assert nulls == 0, f"{nulls} rows with NULL rolling_7d_quantity"
+    assert nulls == 0, "Single-day sample must not fabricate prior-week history"
 
 
 # --- days_since_first_seen >= 0 ---

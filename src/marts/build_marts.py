@@ -49,7 +49,6 @@ def build_marts(config: DBConfig | None = None) -> dict[str, int]:
         # Create tables
         for key in ("fct_ddl", "dim_ddl"):
             conn.execute(SQL_FILES[key].read_text())
-        conn.commit()
 
         # Truncate for full refresh
         conn.execute("TRUNCATE marts.fct_daily_product_sales")
@@ -57,8 +56,6 @@ def build_marts(config: DBConfig | None = None) -> dict[str, int]:
 
         # Insert fact table
         conn.execute(SQL_FILES["fct_insert"].read_text())
-        conn.commit()
-
         # Insert dimension table
         conn.execute(SQL_FILES["dim_insert"].read_text())
         conn.commit()
@@ -69,6 +66,20 @@ def build_marts(config: DBConfig | None = None) -> dict[str, int]:
             ),
             "dim_product": _get_row_count(conn, "marts.dim_product"),
         }
+
+        excluded = conn.execute(
+            "SELECT COUNT(*) FILTER (WHERE NOT is_stock_item), "
+            "COUNT(*) FILTER (WHERE is_stock_item AND price = 0), "
+            "COUNT(*) FILTER (WHERE is_stock_item AND price > 0 AND NOT "
+            "((NOT is_return AND quantity > 0) OR (is_return AND quantity < 0))), "
+            "COUNT(*) FILTER (WHERE is_stock_item AND price > 0 AND "
+            "((NOT is_return AND quantity > 0) OR (is_return AND quantity < 0))) "
+            "FROM staging.stg_online_retail"
+        ).fetchone()
+        print(f"Excluded non-stock lines: {excluded[0]:,}")
+        print(f"Excluded zero-price stock lines (meaning unknown): {excluded[1]:,}")
+        print(f"Excluded stock quantity/sign disagreements: {excluded[2]:,}")
+        print(f"Eligible paid sale/return lines: {excluded[3]:,}")
 
         print(f"Staging rows:              {staging_count:,}")
         print(f"fct_daily_product_sales:   {counts['fct_daily_product_sales']:,}")
