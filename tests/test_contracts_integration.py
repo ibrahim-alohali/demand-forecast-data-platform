@@ -3,6 +3,7 @@
 Run with: python -m pytest tests/ -m integration
 """
 
+import psycopg
 import pytest
 
 from src.db import get_connection
@@ -145,3 +146,43 @@ def test_all_contracts_pass(conn):
 def test_contract_count():
     """ALL_CONTRACTS contains exactly 11 contracts."""
     assert len(ALL_CONTRACTS) == 11
+
+
+@pytest.mark.parametrize("contract,statement", [
+    (stg_row_count, "DELETE FROM staging.stg_online_retail"),
+    (stg_positive_price, "UPDATE staging.stg_online_retail SET price=-1"),
+    (stg_positive_price, "UPDATE staging.stg_online_retail SET price='NaN'"),
+    (stg_valid_customer_id, "UPDATE staging.stg_online_retail SET customer_id=0"),
+    (fct_row_count, "DELETE FROM marts.fct_daily_product_sales"),
+    (fct_grain_uniqueness,
+     "INSERT INTO marts.fct_daily_product_sales "
+     "SELECT * FROM marts.fct_daily_product_sales LIMIT 1"),
+    (fct_non_negative_quantities,
+     "UPDATE marts.fct_daily_product_sales SET total_quantity=-1"),
+    (fct_non_negative_revenue,
+     "UPDATE marts.fct_daily_product_sales SET return_revenue=-1"),
+    (fct_non_negative_revenue,
+     "UPDATE marts.fct_daily_product_sales SET total_revenue='NaN'"),
+    (dim_date_ordering,
+     "UPDATE marts.dim_product SET first_seen=last_seen+1"),
+])
+def test_contract_detects_invalid_data(conn, contract, statement):
+    assert contract(conn).passed
+    conn.execute(statement)
+    result = contract(conn)
+    assert not result.passed
+    assert result.message
+    conn.rollback()
+    assert contract(conn).passed
+
+
+@pytest.mark.parametrize("statement,contract", [
+    ("UPDATE staging.stg_online_retail SET invoice=NULL", stg_not_null_core),
+    ("UPDATE staging.stg_online_retail SET is_return=NULL", stg_boolean_flags_not_null),
+    ("INSERT INTO marts.dim_product SELECT * FROM marts.dim_product LIMIT 1",
+     dim_primary_key_unique),
+])
+def test_database_rejects_constraint_violations_first(conn, statement, contract):
+    with pytest.raises(psycopg.IntegrityError), conn.transaction():
+        conn.execute(statement)
+    assert contract(conn).passed

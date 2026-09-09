@@ -1,7 +1,7 @@
 """Integration tests for raw data loading. Require a running PostgreSQL instance.
 
 Run with: python -m pytest tests/ -m integration
-Skip in CI: python -m pytest tests/ -m "not integration"
+Use an explicitly configured isolated database ending in _test.
 """
 
 import pytest

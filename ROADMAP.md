@@ -1,89 +1,44 @@
-# Roadmap
+# Roadmap and current status
 
-All 8 phases are complete.
+The project implements a local retail-data pipeline and one chronological evaluation of next-day recorded paid gross sales. Completion of a feature does not imply that every model assumption has been validated or that the project is ready for operational use.
 
-## Phase 1. Scaffold (done)
+## Implemented
 
-Goal: Create the repo structure and local development foundation.
+| Area | Current behavior |
+|---|---|
+| Local setup | Python 3.11, PostgreSQL 16, Docker Compose, CLI commands and an isolated integration-test database. |
+| Source ingestion | CSV and all Excel sheets; source metadata; explicit load modes; validated input; native COPY escaping and transactional replacement. |
+| Staging | Exact business-column duplicate removal, text/customer-ID normalization and reconciled exclusions. |
+| Analytical marts | Product-country daily gross paid sales and cancellations, plus a product dimension; both tables refresh atomically. |
+| Quality checks | Eleven staging/mart contracts with positive and negative cases, including database-enforced constraints. |
+| Calendar features | Observed product-country series expanded through the common end date, prior-day/prior-week predictors and documented warmup exclusions. |
+| Evaluation | Fixed chronological split, a pooled linear regression, two simple comparators, explicit coverage and separate sample/full reports. |
+| Documentation | Source attribution, analytical limits, reproducible commands, results and a project/interview walkthrough. |
 
-Done means:
-- repo structure exists
-- Docker setup exists
-- PostgreSQL service is configured
-- Python project setup exists
-- linting and test setup exist
-- README skeleton exists
+The repair removed target-day and whole-period information from model inputs, corrected calendar windows, and replaced misleading single-day sample scoring with `not_evaluable`. It also fixed ingestion escaping and a mart refresh that could publish only one of its two tables.
 
-## Phase 2. Raw ingestion (done)
+## Evidence for the current implementation
 
-Goal: Load source data into raw tables.
+- A clean editable install passed 142 tests and Ruff. CI now includes a PostgreSQL 16 service and runs the complete suite.
+- The checked workbook contains 1,067,371 rows. Independent source reconstruction matched all 589,055 daily fact groups and the date/country summaries of 4,920 products.
+- The full evaluation uses 3,754,801 later observations on the same dates for all three methods. Linear regression has lower RMSE but worse MAE than the previous-day and previous-weekday comparators.
+- The sample demonstrates ingestion and transformations; its one-day span cannot establish forecast accuracy.
 
-Done means:
-- source data is defined
-- ingestion script works locally
-- raw table schema exists
-- load process is documented
-- basic tests exist
+[VERIFICATION.md](docs/VERIFICATION.md) records the checked revisions, environments, repeatability and observed hosted-CI state. [DATA_SOURCE.md](DATA_SOURCE.md) records provenance and exclusions. Those records, not a blanket “all phases complete” statement, define what has been checked.
 
-## Phase 3. Staging (done)
+## Further work requires a concrete question
 
-Goal: Clean and standardize raw data.
+| Possible next step | Evidence or need that would justify it |
+|---|---|
+| More chronological backtests | Determine whether the current metric tradeoff holds across other time periods. |
+| Product/country error breakdowns | Identify where aggregate scores conceal poor results or systematic bias. |
+| Compare another forecasting method | Establish a specific weakness of the current model and keep the same evaluation/comparator discipline. |
+| Reconsider duplicate or zero-price rules | Obtain source information that distinguishes repeated line items, free items and stock adjustments. |
+| Estimate unmet demand or plan inventory | Obtain availability, stockout, lead-time and relevant business-cost data. The current source cannot support those claims. |
+| Automate repeated runs | Have an actual recurring workload, defined failure handling and monitoring requirements. |
 
-Done means:
-- staging transformations exist
-- key columns have correct types
-- bad/null handling is documented
-- tests cover core transformation logic
+No new model, cloud deployment, scheduler, stock-risk feature or replenishment recommendation is promised by this roadmap.
 
-## Phase 4. Marts (done)
+## Before publishing another result
 
-Goal: Create useful analytical tables.
-
-Done means:
-- marts have clear grains
-- transformations are understandable
-- marts support downstream feature creation
-- schema decisions are documented
-
-## Phase 5. Data quality contracts (done)
-
-Goal: Make critical table assumptions explicit and enforceable.
-
-Done means:
-- key validations exist for important tables
-- checks are runnable locally
-- quality rules are documented
-- failures are understandable
-
-## Phase 6. Feature registry and feature tables (done)
-
-Goal: Create ML-ready feature tables and document them properly.
-
-Done means:
-- feature table exists
-- feature registry exists
-- each important feature is documented
-- feature logic is reproducible
-- leakage risk is noted where relevant
-
-## Phase 7. Baseline model (done)
-
-Goal: Train one simple forecasting model on the feature table.
-
-Done means:
-- training script runs
-- baseline evaluation is logged or saved
-- assumptions and limitations are documented
-- the model supports the pipeline story, not hype
-
-## Phase 8. Polish (done)
-
-Goal: Make the repo interview-ready.
-
-Done means:
-- README is strong
-- docs are consistent
-- code is cleaned up
-- tests pass
-- CI works
-- project can be explained clearly in interviews
+Keep the source identity and processing rules explicit, run the relevant tests and database checks, rebuild affected downstream layers, and record the evaluation dates, package versions, coverage and comparator results. Changes to the target or feature meaning require a new explanation and freshly generated evidence; old scores must not be presented as results of the changed implementation.

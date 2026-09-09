@@ -11,7 +11,7 @@ def test_src_package_imports():
     )
 
 
-def test_config_loads_defaults():
+def test_config_loads_defaults(monkeypatch):
     """Verify get_config() returns sensible defaults without a .env file."""
     # Clear any env vars that might interfere
     env_vars = [
@@ -24,6 +24,7 @@ def test_config_loads_defaults():
     original = {k: os.environ.pop(k, None) for k in env_vars}
 
     try:
+        monkeypatch.setattr("src.config.load_dotenv", lambda: None)
         from src.config import get_config
 
         cfg = get_config()
@@ -38,3 +39,16 @@ def test_config_loads_defaults():
         for k, v in original.items():
             if v is not None:
                 os.environ[k] = v
+
+
+def test_conninfo_quotes_credentials():
+    from psycopg.conninfo import conninfo_to_dict
+
+    from src.config import DBConfig
+
+    config = DBConfig(user="a user", password="quote' slash\\ and space",
+                      host="localhost", port=5432, dbname="a database")
+    parsed = conninfo_to_dict(config.conninfo)
+    assert parsed["password"] == config.password
+    assert parsed["user"] == config.user
+    assert parsed["dbname"] == config.dbname

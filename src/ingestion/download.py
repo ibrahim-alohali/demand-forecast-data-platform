@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import zipfile
 from pathlib import Path
+from shutil import copyfileobj
 from urllib.request import urlretrieve
 
 DATASET_URL = (
@@ -43,13 +44,17 @@ def download(data_dir: Path | None = None) -> Path:
     with zipfile.ZipFile(zip_path, "r") as zf:
         # Find the xlsx file inside the zip
         xlsx_names = [n for n in zf.namelist() if n.endswith(".xlsx")]
-        if not xlsx_names:
-            raise FileNotFoundError("No .xlsx file found inside the zip archive")
-        zf.extract(xlsx_names[0], data_dir)
-        extracted = data_dir / xlsx_names[0]
-        # Rename to a consistent name if different
-        if extracted != xlsx_path:
-            extracted.rename(xlsx_path)
+        if len(xlsx_names) != 1:
+            raise ValueError("Expected exactly one .xlsx file in the archive")
+        # Ignore archive paths; stream only the workbook to a fixed local name.
+        # Publish after a successful copy, so interrupted downloads are retryable.
+        partial_path = xlsx_path.with_suffix(".xlsx.part")
+        try:
+            with zf.open(xlsx_names[0]) as source, partial_path.open("wb") as target:
+                copyfileobj(source, target)
+            partial_path.replace(xlsx_path)
+        finally:
+            partial_path.unlink(missing_ok=True)
 
     # Clean up the zip file
     zip_path.unlink()

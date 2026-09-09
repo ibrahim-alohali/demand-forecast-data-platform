@@ -1,48 +1,58 @@
-# Data Quality Contracts
+# Data quality contracts
 
-## What are data quality contracts?
+The project uses eleven Python functions that query staging and mart tables and return a named pass/fail result. They check specific assumptions; passing them is one part of verification.
 
-Data quality contracts are explicit, testable rules that validate critical assumptions about important tables. They catch problems before bad data reaches downstream models or feature tables.
+The [README](../README.md) runs these checks after staging and marts, before building features:
 
-This project uses lightweight Python-based checks rather than a heavy framework. Each contract is a function that queries a table and returns a pass/fail result with a human-readable message.
+~~~powershell
+./.venv/Scripts/python.exe -m src.quality.run_contracts
+~~~
 
-## When contracts are applied
-
-Contracts validate data at layer boundaries after staging and marts are built. They run before any downstream feature generation or modelling.
-
-Run contracts with:
-
-```bash
-make quality
-# or: python -m src.quality.run_contracts
-```
-
-The runner exits 0 if all contracts pass, 1 if any fail.
+The runner exits 0 when all checks pass and 1 when any check fails. A database/query error also stops the command. Calling the feature builder directly does not automatically run the contracts; keep the documented command order and stop on failures.
 
 ## Contract registry
 
-| # | Table | Check | Rule | Rationale |
-|---|-------|-------|------|-----------|
-| 1 | staging.stg_online_retail | row_count | `COUNT(*) > 0` | Empty staging breaks everything downstream |
-| 2 | staging.stg_online_retail | not_null_core | `invoice, stock_code, quantity, invoice_date, price, country IS NOT NULL` | These feed NOT NULL constraints in marts; catch issues before constraint errors |
-| 3 | staging.stg_online_retail | positive_price | `price >= 0` for all rows | Negative prices are nonsensical; returns use negative quantity, not negative price |
-| 4 | staging.stg_online_retail | valid_customer_id | `customer_id > 0` where not NULL | customer_id should be a positive integer when present |
-| 5 | staging.stg_online_retail | boolean_flags_not_null | `is_return IS NOT NULL AND is_stock_item IS NOT NULL` | Downstream filtering depends on these flags |
-| 6 | marts.fct_daily_product_sales | row_count | `COUNT(*) > 0` | Empty fact table means features have nothing to work with |
-| 7 | marts.fct_daily_product_sales | grain_uniqueness | `COUNT(*) = COUNT(DISTINCT (stock_code, sale_date, country))` | Duplicate grains break aggregations and forecasting |
-| 8 | marts.fct_daily_product_sales | non_negative_quantities | `total_quantity >= 0 AND return_quantity >= 0` | Negative aggregated quantities indicate a transformation bug |
-| 9 | marts.fct_daily_product_sales | non_negative_revenue | `total_revenue >= 0 AND return_revenue >= 0` | Negative aggregated revenue indicates a transformation bug |
-| 10 | marts.dim_product | primary_key_unique | `COUNT(*) = COUNT(DISTINCT stock_code)` | Dimension must have one row per product |
-| 11 | marts.dim_product | date_ordering | `first_seen <= last_seen` for all rows | Inverted dates indicate a transformation bug |
+| Table | Check identifier | Rule |
+|---|---|---|
+| `staging.stg_online_retail` | `row_count` | At least one row exists. |
+| `staging.stg_online_retail` | `not_null_core` | Invoice, stock code, quantity, invoice date, price and country are nonnull. |
+| `staging.stg_online_retail` | `positive_price` | Price is finite and nonnegative. The historical identifier includes zero-price staging rows. |
+| `staging.stg_online_retail` | `valid_customer_id` | Every present customer ID is positive. The column's integer type is enforced by PostgreSQL. |
+| `staging.stg_online_retail` | `boolean_flags_not_null` | Both cancellation and stock-item flags are present. |
+| `marts.fct_daily_product_sales` | `row_count` | At least one row exists. |
+| `marts.fct_daily_product_sales` | `grain_uniqueness` | Stock code, date and country identify one fact row. |
+| `marts.fct_daily_product_sales` | `non_negative_quantities` | Gross and returned quantities are nonnegative. |
+| `marts.fct_daily_product_sales` | `non_negative_revenue` | Gross and returned amounts are finite and nonnegative. |
+| `marts.dim_product` | `primary_key_unique` | One row exists per stock code. |
+| `marts.dim_product` | `date_ordering` | First observed eligible date does not follow the last. |
 
-## What is not checked
+Checks live in [contracts.py](../src/quality/contracts.py). Each accepts a psycopg connection and returns `ContractResult(table, check_name, passed, message)`. [run_contracts.py](../src/quality/run_contracts.py) prints the results and determines the exit status.
 
-- **Raw table contracts**: Raw preserves source data as-is. Contracts belong at layer boundaries, not on raw.
-- **Freshness checks**: This is a local full-refresh pipeline. Freshness is meaningless in this context.
-- **Feature table contracts**: Not added. The feature table is a downstream consumer built from validated marts tables. Quality is enforced at the staging and marts boundaries.
+## Input validation and database constraints
 
-## Implementation
+Ingestion validates load modes, supported files, source columns, nonempty input and finite numeric prices before connecting. PostgreSQL enforces raw quantity/date/price types. The raw table still retains source duplicates and negative-price accounting rows; staging applies the analytical exclusions. See [the source record](../DATA_SOURCE.md) and [architecture](../ARCHITECTURE.md).
 
-Contracts live in `src/quality/contracts.py`. Each is a function that takes a psycopg connection and returns a `ContractResult` dataclass with: table, check_name, passed, message.
+Staging has `NOT NULL` constraints on its core fields and flags. The product dimension has a primary key. These constraints reject invalid writes before a contract could inspect them. Contract tests explicitly distinguish that protection from detecting already-stored invalid data.
 
-The CLI runner (`src/quality/run_contracts.py`) executes all contracts and prints a summary table. Integration tests in `tests/test_contracts_integration.py` verify all contracts pass on sample data.
+Zero-price rows are allowed in staging for inspection, but excluded from paid-sales marts. The five negative-price rows in the full source are bad-debt adjustments, excluded from this analysis; negative prices are not described as universally meaningless.
+
+Numeric NaN needs an explicit check: in PostgreSQL, simply testing whether a numeric value is below zero does not reject NaN. The price and revenue contracts include that case.
+
+## What the tests establish
+
+[Contract integration tests](../tests/test_contracts_integration.py) verify the sample's passing results and deliberately introduce empty tables, invalid prices/customers, duplicate fact grains, negative quantities or amounts, and inverted dimension dates. After rollback, the same checks pass again.
+
+Separate cases attempt null core/flag values and a duplicate dimension key and confirm that PostgreSQL rejects them first. The tests use an explicitly configured isolated database ending in `_test`; they truncate tables and must not target a development or full-source database.
+
+[Core regressions](../tests/test_core_regressions.py) also cover input round-trips, load-mode behavior, failed replacement, multiple worksheets, customer conversion, paid-sale/cancellation eligibility, return-only groups and atomic mart refresh. Feature/model tests check calendar windows, chronology and leakage separately.
+
+## Limits of these checks
+
+- They do not prove that a source value is factually correct or that the chosen duplicate/non-stock rules capture every business case.
+- Eleven passing contracts do not independently reconcile totals with the workbook. Full-source reconciliation is separate evidence.
+- Registry validation checks documented columns; it does not replace tests of feature timing and meaning.
+- A historical dataset has no configured freshness service-level target. File identity and period coverage are recorded, rather than claiming a live freshness guarantee.
+- The checks do not establish forecast usefulness, subgroup performance, stock availability or unconstrained demand.
+- Transactions protect each refresh boundary; they do not make the complete multi-command pipeline atomic.
+
+See [VERIFICATION.md](VERIFICATION.md) for the checked revision and local/hosted evidence, and the [full evaluation](full_model_report.md) for the forecasting result.

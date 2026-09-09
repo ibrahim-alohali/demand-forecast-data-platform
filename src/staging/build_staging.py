@@ -18,12 +18,6 @@ DDL_PATH = PROJECT_ROOT / "sql" / "staging_online_retail.sql"
 INSERT_PATH = PROJECT_ROOT / "sql" / "staging_online_retail_insert.sql"
 
 
-def _get_row_count(conn, table: str) -> int:
-    """Return current row count of a table."""
-    result = conn.execute(f"SELECT COUNT(*) FROM {table}")  # noqa: S608
-    return result.fetchone()[0]
-
-
 def build_staging(config: DBConfig | None = None) -> int:
     """Build staging.stg_online_retail from raw.online_retail.
 
@@ -40,23 +34,22 @@ def build_staging(config: DBConfig | None = None) -> int:
         # Create table
         ddl = DDL_PATH.read_text()
         conn.execute(ddl)
-        conn.commit()
 
         # Truncate for full refresh
         conn.execute("TRUNCATE staging.stg_online_retail")
 
         # Run transformation
         insert_sql = INSERT_PATH.read_text()
-        conn.execute(insert_sql)
+        audit = conn.execute(insert_sql).fetchone()
         conn.commit()
 
-        raw_count = _get_row_count(conn, "raw.online_retail")
-        staging_count = _get_row_count(conn, "staging.stg_online_retail")
-        dropped = raw_count - staging_count
-
-        print(f"Raw rows:     {raw_count:,}")
-        print(f"Staging rows: {staging_count:,}")
-        print(f"Dropped:      {dropped:,} (duplicates + broken records)")
+        raw_count, missing, negative, duplicates, invalid_ids, staging_count = audit
+        print(f"Raw rows:              {raw_count:,}")
+        print(f"Excluded missing core: {missing:,}")
+        print(f"Excluded negative price (complete core): {negative:,}")
+        print(f"Exact eligible duplicates removed: {duplicates:,}")
+        print(f"Malformed customer IDs set to NULL (retained rows): {invalid_ids:,}")
+        print(f"Staging rows:          {staging_count:,}")
 
         return staging_count
     finally:
