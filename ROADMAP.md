@@ -24,7 +24,7 @@ The repair removed target-day and whole-period information from model inputs, co
 - The full evaluation uses 3,754,801 later observations on the same dates for all three methods. Linear regression has lower RMSE but worse MAE than the previous-day and previous-weekday comparators.
 - The sample demonstrates ingestion and transformations; its one-day span cannot establish forecast accuracy.
 
-[VERIFICATION.md](docs/VERIFICATION.md) records the checked revisions, environments, repeatability and observed hosted-CI state. [DATA_SOURCE.md](DATA_SOURCE.md) records provenance and exclusions. Those records, not a blanket “all phases complete” statement, define what has been checked.
+[VERIFICATION.md](docs/VERIFICATION.md) records the checked revisions, environments, repeatability and observed hosted-CI state. [DATA_SOURCE.md](DATA_SOURCE.md) records provenance and exclusions. Those records define the scope of verification.
 
 ## Further work requires a concrete question
 
