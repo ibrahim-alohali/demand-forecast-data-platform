@@ -19,7 +19,7 @@ the repaired implementation, not the earlier same-day model evaluation.
 | Full-source independent arithmetic | All 589,055 fact groups and 4,920 product date/country summaries matched a separate source census |
 | Repeatability | Two complete loads/builds produced identical ordered business-data hashes for all five tables |
 | Model repeatability | Evaluation JSON was byte-identical across both full runs in the same environment |
-| Hosted CI for the repaired revision | Not yet observed; local test success is not a hosted CI result |
+| Hosted CI for the repaired revision | [GitHub Actions run 34422908187](https://github.com/ibrahim-alohali/demand-forecast-data-platform/actions/runs/34422908187) passed on 10 September 2026 at commit `227519abf89c0b99c96420b0f5c54e387a8fa97f`: Ruff and all 142 unit/PostgreSQL integration tests |
 
 The test PostgreSQL service used a separate database, container, port and volume from
 the original development database. Full-data runs and each integration-test group also
@@ -117,5 +117,6 @@ does not claim bit-identical full-model coefficients across dependency versions.
 
 The data is historical, one temporal split is used, inventory is unknown, and aggregate
 errors can hide variation across products and countries. There is no live forecasting
-deployment or measured business impact. Hosted CI remains open until its actual result
-is observed after publication.
+deployment or measured business impact. Hosted CI covers lint and the unit/PostgreSQL
+integration suite; the full-workbook reconciliation and model evaluation above were
+verified locally.
