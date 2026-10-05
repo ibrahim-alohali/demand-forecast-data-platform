@@ -3,13 +3,13 @@
 Local verification: 9 September 2026. The checked source is UCI Online Retail II,
 SHA-256 `bcbe73b35f5b7babf197fb0cb983a11f5d9ff929078d4aa53d171b1f2df2e980`.
 The full workbook remained unchanged throughout verification. This record describes
-the repaired implementation, not the earlier same-day model evaluation.
+the September 2026 revision, not the earlier same-day model evaluation.
 
 ## Checks and evidence
 
 | Check | Result |
 |---|---|
-| Original unit/integration baseline | 86 tests passed before repairs; new regressions then reproduced the defects |
+| Original unit/integration baseline | 86 tests passed before the revision; new regression tests then reproduced the defects |
 | Clean editable installation | `python -m pip install -e ".[dev]"` succeeded in a new Python 3.11 environment |
 | Final unit and PostgreSQL integration suite | 142 tests passed; Ruff passed |
 | Integration isolation guard | Missing connection variables and a database name without `_test` are rejected before fixtures run |
@@ -19,7 +19,7 @@ the repaired implementation, not the earlier same-day model evaluation.
 | Full-source independent arithmetic | All 589,055 fact groups and 4,920 product date/country summaries matched a separate source census |
 | Repeatability | Two complete loads/builds produced identical ordered business-data hashes for all five tables |
 | Model repeatability | Evaluation JSON was byte-identical across both full runs in the same environment |
-| Hosted CI for the repaired revision | [GitHub Actions run 37317228972](https://github.com/ibrahim-alohali/demand-forecast-data-platform/actions/runs/37317228972) passed on 5 October 2026 at commit `b3dde1fc09615abc7bc93e76f1a7c031b3dd80b9`: Ruff and all 142 unit/PostgreSQL integration tests |
+| Hosted CI | [GitHub Actions run 37317228972](https://github.com/ibrahim-alohali/demand-forecast-data-platform/actions/runs/37317228972) passed on 5 October 2026 at commit `b3dde1fc09615abc7bc93e76f1a7c031b3dd80b9`: Ruff and all 142 unit/PostgreSQL integration tests |
 
 The test PostgreSQL service used a separate database, container, port and volume from
 the original development database. Full-data runs and each integration-test group also

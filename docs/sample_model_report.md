@@ -24,8 +24,8 @@ These commands evaluate the feature table currently loaded in PostgreSQL. `--sou
 
 Evaluation uses the four predictors defined in the [feature registry](feature_registry.md), an 80/20 chronological split of eligible dates, and identical evaluation rows for linear regression, previous-day and previous-weekday forecasts. It records date boundaries, history exclusions, new test series, coefficients and the smallest, nearest-median and largest absolute-error examples. R-squared is null for fewer than two evaluation observations or a constant target.
 
-The old same-day model report has been removed because its predictors included information from the day being predicted. Its scores must not appear as forecasting results in the CV, portfolio or README. Use only the corrected full-run report and its matching verification evidence.
+An earlier same-day model report was removed in the September 2026 revision because its predictors included information from the day being predicted. Its scores are not valid forecasting results; the current results are in the [full-run report](full_model_report.md).
 
 ## Limitations
 
-The target is recorded **paid gross sales quantity**, not unconstrained demand or net sales after returns. Missing transaction days are zeros in the observed record; closures and stockouts cannot be distinguished. A fixed pooled linear model and one holdout period do not establish performance on other retailers, periods or product ranges. Better performance than either naive comparator is an empirical question, not a requirement for publishing an honest result.
+The target is recorded **paid gross sales quantity**, not unconstrained demand or net sales after returns. Missing transaction days are zeros in the observed record; closures and stockouts cannot be distinguished. A fixed pooled linear model and one holdout period do not establish performance on other retailers, periods or product ranges.

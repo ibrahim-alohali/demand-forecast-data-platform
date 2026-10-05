@@ -13,9 +13,9 @@ The project implements a local retail-data pipeline and one chronological evalua
 | Quality checks | Eleven staging/mart contracts with positive and negative cases, including database-enforced constraints. |
 | Calendar features | Observed product-country series expanded through the common end date, prior-day/prior-week predictors and documented warmup exclusions. |
 | Evaluation | Fixed chronological split, a pooled linear regression, two simple comparators, explicit coverage and separate sample/full reports. |
-| Documentation | Source attribution, analytical limits, reproducible commands, results and a project/interview walkthrough. |
+| Documentation | Source attribution, analytical limits, reproducible commands, results and a project walkthrough. |
 
-The repair removed target-day and whole-period information from model inputs, corrected calendar windows, and replaced misleading single-day sample scoring with `not_evaluable`. It also fixed ingestion escaping and a mart refresh that could publish only one of its two tables.
+The September 2026 revision removed target-day and whole-period information from model inputs, corrected calendar windows, and replaced misleading single-day sample scoring with `not_evaluable`. It also fixed ingestion escaping and a mart refresh that could publish only one of its two tables.
 
 ## Evidence for the current implementation
 

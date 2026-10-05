@@ -180,7 +180,7 @@ CI configures its own PostgreSQL 16 service and runs lint plus all unit and inte
 - [Data source](DATA_SOURCE.md): attribution, checksum, reconciliation and analytical limits.
 - [Data quality contracts](docs/data_quality_contracts.md): implemented checks and negative test cases.
 - [Feature registry](docs/feature_registry.md): fields, definitions and permitted model inputs.
-- [Walkthrough](docs/WALKTHROUGH.md): sample demonstration and interview explanations.
+- [Walkthrough](docs/WALKTHROUGH.md): how data moves through the layers, design decisions and a sample demonstration.
 - [Verification](docs/VERIFICATION.md): checked revisions, environments and repeatability evidence.
 - [Roadmap](ROADMAP.md): implemented work and evidence needed for further development.
 

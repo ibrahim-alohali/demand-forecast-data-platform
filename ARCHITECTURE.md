@@ -28,7 +28,7 @@ The product dimension joins to facts by stock code, many-to-one. Country remains
 
 ## Source ingestion
 
-CSV and all Excel worksheets use the same eight-field source mapping. Validate the mode, format, columns and nonempty sheets before opening a database connection. Unknown or duplicate columns and invalid/non-finite prices are rejected. Empty fields become null; text labels such as `NA`, `NULL` and `\N` remain literal.
+CSV and all Excel worksheets use the same eight-field source mapping. Ingestion validates the mode, format, columns and nonempty sheets before it opens a database connection. Unknown or duplicate columns and invalid/non-finite prices are rejected. Empty fields become null; text labels such as `NA`, `NULL` and `\N` remain literal.
 
 The raw table makes minimal, typed changes: quantities are integers, dates are timestamps and prices are numeric with four decimal places. It is not a byte-for-byte archive. Retain the original workbook and its SHA-256 alongside the source identity recorded in evaluation output. The checked workbook had no price changes at that numeric scale; see [DATA_SOURCE.md](DATA_SOURCE.md).
 
@@ -69,7 +69,7 @@ Amounts are aggregated by the fact grain and stored at two decimal places in ste
 
 ## Calendar features and prediction timing
 
-For an observed product-country pair, build calendar rows from its first eligible sale or return through the global last eligible date. Do not stop a series at its last sale: that endpoint would use future knowledge. Do not create a cross-product of every product and every country.
+For each observed product-country pair, calendar rows run from its first eligible sale or return to the global last eligible date. A series does not stop at its last sale, because choosing that endpoint would use future knowledge. Products and countries that never appeared together are not combined.
 
 A missing transaction day means zero recorded paid sales in this dataset. It does not establish stock availability, zero customer demand or whether the product was still offered.
 

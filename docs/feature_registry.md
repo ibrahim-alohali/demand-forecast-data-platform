@@ -4,11 +4,11 @@ The feature table has one row per product (`stock_code`), country and calendar d
 
 ## Calendar and observation timing
 
-For each product-country pair present in the sales/returns mart, create every calendar date from its first eligible record through the shared end of the mart's observation period. Do not stop at that pair's last recorded sale: that would use future knowledge to decide when to stop forecasting. Do not create combinations of products and countries that were never observed.
+For each product-country pair in the sales/returns mart, the table has every calendar date from the pair's first eligible record to the shared end of the mart's observation period. A series does not stop at the pair's last recorded sale, because that would use future knowledge to decide when to stop forecasting. Product-country combinations that were never observed are not created.
 
 A missing transaction day contributes zero recorded quantity and revenue. This includes days the retailer may have been closed or unable to supply an item; the dataset does not identify those causes.
 
-For a forecast dated `t`, use observations through `t−1` and the known weekday of `t`. Each series needs seven prior calendar days. Rows without that history remain in the feature table with null lag/mean values and are excluded from model fitting and evaluation. Evaluation output counts these exclusions, including those within the test period.
+A forecast for date `t` uses observations through `t−1` and the known weekday of `t`. Each series needs seven prior calendar days. Rows without that history remain in the feature table with null lag/mean values and are excluded from model fitting and evaluation. Evaluation output counts these exclusions, including those within the test period.
 
 ## Model input contract
 
