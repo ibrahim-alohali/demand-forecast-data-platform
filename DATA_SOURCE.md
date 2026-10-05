@@ -6,7 +6,7 @@ This project uses **Online Retail II**, a public record of transactions from a U
 
 Chen, D. (2012). *Online Retail II* [Dataset]. UCI Machine Learning Repository. [DOI: 10.24432/C5CG6D](https://doi.org/10.24432/C5CG6D).
 
-UCI publishes the dataset under [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/). This attribution concerns the dataset; it does not independently assign a license to the project's code.
+UCI publishes the dataset under [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/). This attribution concerns the dataset. The project's code is released separately under the [MIT License](LICENSE).
 
 ## Checked input
 

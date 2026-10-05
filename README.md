@@ -183,3 +183,7 @@ CI configures its own PostgreSQL 16 service and runs lint plus all unit and inte
 - [Walkthrough](docs/WALKTHROUGH.md): sample demonstration and interview explanations.
 - [Verification](docs/VERIFICATION.md): checked revisions, environments and repeatability evidence.
 - [Roadmap](ROADMAP.md): implemented work and evidence needed for further development.
+
+## License
+
+The code is released under the [MIT License](LICENSE). The Online Retail II data is published by UCI under CC BY 4.0; see [Data source](DATA_SOURCE.md).
