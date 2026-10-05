@@ -19,7 +19,7 @@ the September 2026 revision, not the earlier same-day model evaluation.
 | Full-source independent arithmetic | All 589,055 fact groups and 4,920 product date/country summaries matched a separate source census |
 | Repeatability | Two complete loads/builds produced identical ordered business-data hashes for all five tables |
 | Model repeatability | Evaluation JSON was byte-identical across both full runs in the same environment |
-| Hosted CI | [GitHub Actions run 37317228972](https://github.com/ibrahim-alohali/demand-forecast-data-platform/actions/runs/37317228972) passed on 5 October 2026 at commit `b3dde1fc09615abc7bc93e76f1a7c031b3dd80b9`: Ruff and all 142 unit/PostgreSQL integration tests |
+| Hosted CI | [GitHub Actions run 37342172516](https://github.com/ibrahim-alohali/demand-forecast-data-platform/actions/runs/37342172516) passed on 5 October 2026 at commit `4278b3abe7100806b2ba7c357487e39a56628b4b`: Ruff and all 142 unit/PostgreSQL integration tests |
 
 The test PostgreSQL service used a separate database, container, port and volume from
 the original development database. Full-data runs and each integration-test group also
